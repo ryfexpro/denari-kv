@@ -354,9 +354,11 @@ function guestCard(g){
   <div class="note">${esc(g.guest_name||"гость")} · ${dm(g.checkin)} → ${dm(g.checkout)} · ${g.guests??"?"} взр · ${g.source==="extra"?"экстра":"Booking"}${g.guest_sent_at?` · ссылка отправлена ${new Date(g.guest_sent_at).toLocaleDateString("ru-RU")}`:""}</div>
   ${G?`<div class="leg"><div class="l">Данные для договора</div><div class="v">${esc(G.first_name)} ${esc(G.last_name)}</div>
     <div class="m">${esc(G.phone)}${G.email?" · "+esc(G.email):""}${G.arrival_time?" · приезд ~"+esc(G.arrival_time):""}</div>
+    ${G.doc_number?`<div class="m">Документ № ${esc(G.doc_number)}</div>`:""}
     ${G.others?`<div class="m">Ещё гости: ${esc(G.others)}</div>`:""}
+    <div class="m">${G.contract_accepted_at?`✍️ Договор подписан ${new Date(G.contract_accepted_at).toLocaleString("ru-RU",{dateStyle:"short",timeStyle:"short"})} (${GL[G.contract_lang]||G.contract_lang})`:"✍️ Договор ещё не подписан"}</div>
     <div class="m">${G.docs_deleted_at?"Фото документов удалены "+new Date(G.docs_deleted_at).toLocaleDateString("ru-RU"):`Фото документа: ${G.docs}`}${G.checked_at?` · проверил(а) ${esc(G.checked_by||"")}`:""}</div></div>
-    <div class="bar">${G.docs?`<button class="sm" data-gdocs="${g.id}">${ui.open==="gd"+g.id?"Скрыть документ":"Документ"}</button>`:""}
+    <div class="bar"><button class="sm" data-gctr="${g.id}">Договор</button>${G.docs?`<button class="sm" data-gdocs="${g.id}">${ui.open==="gd"+g.id?"Скрыть документ":"Документ"}</button>`:""}
       ${g.guest_status==="checked"?`<button class="sm" data-gunchk="${g.id}">Снять отметку</button>`:`<button class="sm go" data-gchk="${g.id}">Проверено ✓</button>`}
       ${G.docs?`<button class="sm warn" data-gxdel="${g.id}">Удалить фото документа</button>`:""}</div>
     ${ui.open==="gd"+g.id?(cache.gdocs?.[g.id]?`<div class="gal">${cache.gdocs[g.id].map(u=>`<a href="${u}" target="_blank" rel="noopener"><img src="${u}" alt="документ"></a>`).join("")}</div><div class="note">Ссылки на фото действуют 5 минут. Каждый просмотр записывается в журнал.</div>`:`<div class="note">Загружаю…</div>`):""}
@@ -457,6 +459,7 @@ document.addEventListener("click",async e=>{
     else if(d.gwa){await guestShare(+d.gwa,d.l,"wa")}
     else if(d.gvb){await guestShare(+d.gvb,d.l,"vb")}
     else if(d.gdocs){const id=+d.gdocs;ui.open=ui.open==="gd"+id?null:"gd"+id;render();if(ui.open){cache.gdocs=cache.gdocs||{};cache.gdocs[id]=await call("guest_docs",{booking_id:id})}}
+    else if(d.gctr){const g=cache.guests.find(x=>x.id===+d.gctr);const u=`${GUEST_URL}?t=${g.guest_token}&l=${g.guest.contract_lang||"ro"}&print=1`;if(TG?.openLink)TG.openLink(u);else window.open(u,"_blank");return}
     else if(d.gchk){await call("guest_check",{booking_id:+d.gchk,ok:true});toast("Отмечено: данные проверены");await load();return}
     else if(d.gunchk){await call("guest_check",{booking_id:+d.gunchk,ok:false});await load();return}
     else if(d.gxdel){ui.sheet="gx"+d.gxdel}

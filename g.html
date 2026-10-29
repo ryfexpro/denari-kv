@@ -50,6 +50,18 @@ button:disabled{opacity:.5}
 .lock{background:var(--panel2);border-radius:12px;padding:12px;font-size:14.5px}
 pre{white-space:pre-wrap;font:inherit;margin:0}
 .center{text-align:center;padding:40px 18px}
+.cwrap{max-height:55vh;overflow:auto;border:1px solid var(--line);border-radius:12px;background:#fff;color:#111}
+.contract{font-family:Georgia,"Times New Roman",serif;font-size:13.5px;line-height:1.5;padding:18px;color:#111;background:#fff}
+.contract h2{font-size:16px;text-align:center;margin:0 0 4px}.contract h3{font-size:13.5px;margin:14px 0 4px}.contract p{margin:4px 0}.contract .r{text-align:right;margin-bottom:10px}
+.contract .n{font-weight:700}.parties{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:8px;font-size:12.5px}@media(max-width:420px){.parties{grid-template-columns:1fr}}
+.party .pl{font-weight:700;letter-spacing:.05em;margin-bottom:2px}.stampbox{position:relative;min-height:120px;margin-top:6px}
+.stamp{position:absolute;left:-6px;top:-14px;width:230px;max-width:100%;pointer-events:none}
+.contract .line{position:absolute;left:0;right:10px;bottom:6px;border-top:1px solid #333;font-size:11px;color:#555;padding-top:2px}
+.contract .acc{position:absolute;left:0;right:0;bottom:6px;font-size:12px;color:#1f7a45;font-weight:600}
+#printc{display:none}
+body.pm .wrap>header,body.pm #app{display:none}body.pm #printc{display:block;max-width:760px;margin:0 auto}
+.pbar{display:flex;gap:8px;justify-content:center;padding:12px}
+@media print{body{background:#fff;padding:0}.wrap>header,#app,.pbar{display:none!important}#printc{display:block!important}.contract{padding:0;font-size:12.5px}@page{margin:16mm}}
 </style>
 </head>
 <body>
@@ -57,6 +69,8 @@ pre{white-space:pre-wrap;font:inherit;margin:0}
   <header><div class="logo"><i>D</i><span id="co">Denari</span></div><div class="sp"></div><select class="lang" id="lang" aria-label="Language"></select></header>
   <main id="app" class="wrap" style="gap:14px"><div class="card center mute">…</div></main>
 </div>
+<script src="contract.js"></script>
+<div id="printc"></div>
 <script>
 const API="https://zsrddmgiefmuwvcobkin.supabase.co/functions/v1/kv-guest";
 const NAMES={ro:"Română",ru:"Русский",uk:"Українська",en:"English",it:"Italiano",de:"Deutsch",tr:"Türkçe"};
@@ -69,6 +83,7 @@ it:{title:"Check-in online",hello:"Buongiorno{n}!",yours:"La sua prenotazione",i
 de:{title:"Online-Check-in",hello:"Guten Tag{n}!",yours:"Ihre Buchung",in:"Anreise",out:"Abreise",from:"ab",until:"bis",guests:"Gäste",step1:"Schritt 1 von 2 · Angaben für den Mietvertrag",why:"Wir schließen mit jedem Gast einen kurzen Mietvertrag. Bitte füllen Sie Ihre Daten vor der Anreise aus — das dauert 2 Minuten.",first:"Vorname",last:"Nachname",phone:"Telefon",email:"E-Mail",arrival:"Voraussichtliche Ankunftszeit",others:"Weitere erwachsene Gäste (Vor- und Nachname)",opt:"optional",doc:"Foto des Ausweisdokuments",dochint:"Reisepass (Seite mit Foto) oder Personalausweis — beide Seiten. Name und Nummer müssen lesbar sein.",add:"Foto hinzufügen",consent:"Ich willige ein, dass {c} meine personenbezogenen Daten (Name, Telefon, Foto des Ausweises) zum Abschluss des Mietvertrags und zur Registrierung des Aufenthalts verarbeitet. Die Daten werden sicher gespeichert und nicht an Dritte weitergegeben, außer wenn das Gesetz es verlangt.",send:"Absenden",e_req:"Bitte Vorname, Nachname und Telefon ausfüllen",e_phone:"Bitte Telefonnummer prüfen",e_email:"Bitte E-Mail-Adresse prüfen",e_doc:"Bitte mindestens ein Foto des Dokuments hinzufügen",e_consent:"Bitte die Einwilligung bestätigen",e_net:"Keine Verbindung. Bitte erneut versuchen.",e_up:"Das Foto wurde nicht hochgeladen. Bitte erneut versuchen.",e_many:"Zu viele Fotos. Bitte kontaktieren Sie uns.",thanks:"Vielen Dank! Ihre Daten sind angekommen.",checked:"Daten geprüft ✓",step2:"Schritt 2 von 2 · Check-in-Anleitung",address:"Adresse",map:"Karte öffnen",entrance:"Eingang",floor:"Etage",flat:"Wohnung",parking:"Parken",code:"Code / Schlüssel",wifi:"WLAN",pass:"Passwort",later:"Türcode und WLAN erscheinen hier am Anreisetag ({d}). Bitte bewahren Sie diesen Link auf.",contact:"Kontakt",call:"Anrufen",rules:"Hausregeln",edit:"Daten ändern",expired:"Dieser Link ist nicht mehr gültig. Wenn Sie Hilfe brauchen, kontaktieren Sie uns.",notfound:"Link nicht gefunden. Bitte prüfen Sie, ob er vollständig kopiert wurde.",locked:"Ihre Daten wurden bereits geprüft. Für Änderungen kontaktieren Sie uns bitte.",copy:"Kopieren",copied:"Kopiert"},
 tr:{title:"Online check-in",hello:"Merhaba{n}!",yours:"Rezervasyonunuz",in:"Giriş",out:"Çıkış",from:"saat",until:"saate kadar",guests:"misafir",step1:"Adım 1/2 · Kira sözleşmesi için bilgiler",why:"Her misafirle kısa bir kira sözleşmesi yapıyoruz. Lütfen bilgilerinizi gelmeden önce doldurun — 2 dakika sürer.",first:"Ad",last:"Soyad",phone:"Telefon",email:"E-posta",arrival:"Tahmini varış saati",others:"Diğer yetişkin misafirler (ad ve soyad)",opt:"isteğe bağlı",doc:"Kimlik belgesinin fotoğrafı",dochint:"Pasaport (fotoğraflı sayfa) veya kimlik kartı — iki yüzü. Ad ve numara okunaklı olmalı.",add:"Fotoğraf ekle",consent:"{c} tarafından kişisel verilerimin (ad, telefon, kimlik fotoğrafı) kira sözleşmesinin yapılması ve konaklamanın kaydı amacıyla işlenmesine onay veriyorum. Veriler güvenli şekilde saklanır ve yasanın gerektirdiği durumlar dışında üçüncü kişilerle paylaşılmaz.",send:"Gönder",e_req:"Lütfen ad, soyad ve telefonu doldurun",e_phone:"Lütfen telefon numarasını kontrol edin",e_email:"Lütfen e-posta adresini kontrol edin",e_doc:"Lütfen belgenin en az bir fotoğrafını ekleyin",e_consent:"Lütfen onay kutusunu işaretleyin",e_net:"Bağlantı yok. Lütfen tekrar deneyin.",e_up:"Fotoğraf yüklenemedi. Lütfen tekrar deneyin.",e_many:"Çok fazla fotoğraf. Lütfen bizimle iletişime geçin.",thanks:"Teşekkürler! Bilgileriniz alındı.",checked:"Bilgiler doğrulandı ✓",step2:"Adım 2/2 · Giriş talimatları",address:"Adres",map:"Haritayı aç",entrance:"Giriş",floor:"Kat",flat:"Daire",parking:"Otopark",code:"Kod / anahtar",wifi:"Wi-Fi",pass:"Şifre",later:"Kapı kodu ve Wi-Fi bilgileri varış gününüzde ({d}) burada görünecek. Lütfen bu bağlantıyı saklayın.",contact:"Bize ulaşın",call:"Ara",rules:"Ev kuralları",edit:"Bilgileri değiştir",expired:"Bu bağlantı artık geçerli değil. Yardıma ihtiyacınız varsa bize ulaşın.",notfound:"Bağlantı bulunamadı. Tamamını kopyaladığınızdan emin olun.",locked:"Bilgileriniz zaten doğrulandı. Değişiklik için bize ulaşın.",copy:"Kopyala",copied:"Kopyalandı"}
 };
+for(const l in CT) Object.assign(T[l],CT[l].ui);
 const q=new URLSearchParams(location.search), TOKEN=q.get("t")||"";
 let L=pickLang(q.get("l")), D=null, docs=[], editing=false, err="";
 function pickLang(x){for(const c of [x,...(navigator.languages||[navigator.language||""])]){const k=(c||"").slice(0,2).toLowerCase();if(T[k])return k;if(k==="mo")return "ro"}return "en"}
@@ -108,6 +123,7 @@ function form(){
   return `<form class="card" id="f" novalidate><div class="step">${t("step1")}</div><div class="mute">${t("why")}</div>
   <div class="grid2"><label class="f">${t("first")}<input id="fn" autocomplete="given-name" value="${esc(g.first_name)}" required></label><label class="f">${t("last")}<input id="ln" autocomplete="family-name" value="${esc(g.last_name)}" required></label></div>
   <div class="grid2"><label class="f">${t("phone")}<input id="ph" type="tel" inputmode="tel" autocomplete="tel" placeholder="+373 …" value="${esc(g.phone)}" required></label><label class="f">${t("arrival")} <small>${t("opt")}</small><input id="ar" placeholder="15:00" value="${esc(g.arrival_time)}"></label></div>
+  <label class="f">${t("docno")}<input id="dn" autocomplete="off" value="${esc(g.doc_number)}" required></label>
   <label class="f">${t("email")} <small>${t("opt")}</small><input id="em" type="email" autocomplete="email" value="${esc(g.email)}"></label>
   <label class="f">${t("others")} <small>${t("opt")}</small><input id="ot" value="${esc(g.others)}"></label>
   <div class="f" style="display:flex;flex-direction:column;gap:5px;font-size:14px;font-weight:500">${t("doc")}<small class="mute" style="font-weight:400">${t("dochint")}</small></div>
@@ -121,6 +137,7 @@ function instructions(){
   const s=D.secret, done=D.status==="checked";
   let h=`<div class="card ok"><h2>${done?t("checked"):t("thanks")}</h2><div class="mute">${esc(D.guest.first_name)} ${esc(D.guest.last_name)} · ${esc(D.guest.phone)}</div>
     ${done?"":`<button type="button" data-edit="1">${t("edit")}</button>`}</div>
+    ${contractCard()}
     <div class="card"><div class="step">${t("step2")}</div>`;
   if(!s){h+=`<div class="lock">🔒 ${esc(t("later").replace("{d}",fmt(D.checkin)))}</div>`}
   else{
@@ -131,10 +148,21 @@ function instructions(){
   }
   return h+`</div>`;
 }
+function contractCard(){
+  const c=D.contract;if(!c)return "";
+  if(c.accepted_at) return `<div class="card ok"><h2>✍️ ${t("c_done")}</h2><div class="mute">${new Date(c.accepted_at).toLocaleString(L==="uk"?"uk-UA":L,{dateStyle:"long",timeStyle:"short"})}</div>
+    <div class="row"><button type="button" data-print="1">📄 ${t("c_print")}</button></div>
+    <details><summary class="mute" style="cursor:pointer">${t("c_show")}</summary><div class="cwrap" style="margin-top:8px">${contractHTML(c,L,esc)}</div></details></div>`;
+  return `<div class="card"><h2>📄 ${t("c_title")}</h2><div class="mute">${t("c_read")}</div><div class="cwrap">${contractHTML(c,L,esc)}</div>
+    <label class="consent"><input type="checkbox" id="ca">${t("c_agree")}</label>${err?`<div class="err">${esc(err)}</div>`:""}
+    <button class="go" type="button" data-accept="1">${t("c_btn")}</button></div>`;
+}
+function fillPrint(){const el=document.getElementById("printc");el.innerHTML=D?.contract?`<div class="pbar"><button type="button" data-print="1">📄 ${t("c_print")}</button></div>${contractHTML(D.contract,L,esc)}`:"";}
 function render(){
   sel.value=L; document.getElementById("co").textContent=D?.company||"Denari";
   if(!D) return;
   if(D.expired) return msg(t("expired"));
+  fillPrint(); if(q.get("print")&&D.contract){document.body.classList.add("pm");return}
   const showForm=!D.filled||editing;
   const rules=pick(D.rules);
   document.getElementById("app").innerHTML=summary()+(showForm?form():instructions())+(rules?`<div class="card"><h2>${t("rules")}</h2><pre class="mute">${esc(rules)}</pre></div>`:"")+contact();
@@ -146,7 +174,7 @@ async function compress(file){
   c.getContext("2d").drawImage(img,0,0,c.width,c.height);return await new Promise(r=>c.toBlob(b=>r(b||file),"image/jpeg",.85));
 }
 async function put(url,blob){for(let i=0;i<3;i++){try{const r=await fetch(url,{method:"PUT",headers:{"content-type":"image/jpeg","x-upsert":"true"},body:blob});if(r.ok)return true}catch(e){}await new Promise(r=>setTimeout(r,1500*(i+1)))}return false}
-function keep(){const v=id=>document.getElementById(id)?.value;if(!document.getElementById("fn"))return;D.guest={...(D.guest||{}),first_name:v("fn"),last_name:v("ln"),phone:v("ph"),arrival_time:v("ar"),email:v("em"),others:v("ot")};D._cs=document.getElementById("cs")?.checked}
+function keep(){const v=id=>document.getElementById(id)?.value;if(!document.getElementById("fn"))return;D.guest={...(D.guest||{}),doc_number:v("dn"),first_name:v("fn"),last_name:v("ln"),phone:v("ph"),arrival_time:v("ar"),email:v("em"),others:v("ot")};D._cs=document.getElementById("cs")?.checked}
 function rerender(){keep();const cs=D._cs;render();if(cs&&document.getElementById("cs"))document.getElementById("cs").checked=true}
 
 document.addEventListener("change",async e=>{
@@ -159,6 +187,9 @@ document.addEventListener("change",async e=>{
 document.addEventListener("click",async e=>{
   const b=e.target.closest("button");if(!b)return;
   if(b.dataset.rm){docs.splice(+b.dataset.rm,1);rerender()}
+  else if(b.dataset.print){fillPrint();window.print()}
+  else if(b.dataset.accept){if(!document.getElementById("ca")?.checked){err=t("e_agree");render();return}
+    b.disabled=true;try{D=await call("accept",{lang:L});err="";render()}catch(x){err=t("e_net");render()}}
   else if(b.dataset.edit){editing=true;docs=[];err="";render()}
   else if(b.dataset.copy){try{await navigator.clipboard.writeText(b.dataset.copy);b.textContent=t("copied")}catch(_){}}
 });
@@ -166,13 +197,14 @@ document.addEventListener("submit",async e=>{
   e.preventDefault();keep();const g=D.guest;err="";
   if(!g.first_name?.trim()||!g.last_name?.trim()||!g.phone?.trim())err=t("e_req");
   else if(g.phone.replace(/\D/g,"").length<6)err=t("e_phone");
+  else if((g.doc_number||"").trim().length<4)err=t("e_docno");
   else if(g.email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(g.email))err=t("e_email");
   else if(!docs.filter(d=>d.path).length)err=t("e_doc");
   else if(!D._cs)err=t("e_consent");
   if(err)return rerender();
   const sb=document.getElementById("sb");sb.disabled=true;sb.textContent="…";
-  try{D=await call("submit",{first_name:g.first_name,last_name:g.last_name,phone:g.phone,email:g.email||null,arrival_time:g.arrival_time||null,others:g.others||null,doc_paths:docs.filter(d=>d.path).map(d=>d.path),consent:true,lang:L});editing=false;docs=[];render();scrollTo({top:0,behavior:"smooth"})}
-  catch(x){const m={phone:"e_phone",email:"e_email",doc:"e_doc",consent:"e_consent",name:"e_req",checked:"locked",expired:"expired"}[x.message];err=t(m||"e_net");rerender()}
+  try{D=await call("submit",{first_name:g.first_name,last_name:g.last_name,phone:g.phone,doc_number:g.doc_number,email:g.email||null,arrival_time:g.arrival_time||null,others:g.others||null,doc_paths:docs.filter(d=>d.path).map(d=>d.path),consent:true,lang:L});editing=false;docs=[];render();scrollTo({top:0,behavior:"smooth"})}
+  catch(x){const m={docno:"e_docno",phone:"e_phone",email:"e_email",doc:"e_doc",consent:"e_consent",name:"e_req",checked:"locked",expired:"expired"}[x.message];err=t(m||"e_net");rerender()}
 });
 boot();
 </script>
