@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<meta name="referrer" content="no-referrer">
+<title>Online check-in</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&display=swap">
+<style>
+:root{--bg:#f4f6fa;--panel:#fff;--panel2:#f0f3f8;--line:#dfe4ec;--fg:#0d1320;--mute:#5d6878;--accent:#2f7bff;--good:#1f9d57;--bad:#d64535;--amber:#b7791f;color-scheme:light}
+@media (prefers-color-scheme:dark){:root{--bg:#05070b;--panel:#0c1018;--panel2:#111722;--line:#1c2433;--fg:#e8edf6;--mute:#8b97ab;--good:#5bd38a;--bad:#ff7a6b;--amber:#f2b25c;color-scheme:dark}}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--fg)}
+body{font-family:"Onest",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:16px;line-height:1.5;padding:0 16px 48px}
+.wrap{max-width:560px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
+header{display:flex;align-items:center;gap:10px;padding:16px 0 4px}
+.logo{display:flex;align-items:center;gap:9px;font-weight:700;font-size:16px}
+.logo i{width:28px;height:28px;border-radius:8px;background:var(--accent);color:#fff;display:grid;place-items:center;font-style:normal;font-size:13px}
+.sp{flex:1}
+select,input,textarea{font:inherit;font-size:16px;background:var(--panel2);color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:11px 12px;width:100%;min-width:0}
+select.lang{width:auto;padding:7px 10px;font-size:14px}
+input:focus,textarea:focus,select:focus{outline:2px solid color-mix(in srgb,var(--accent) 55%,transparent);outline-offset:1px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px;display:flex;flex-direction:column;gap:12px}
+h1{font-size:22px;margin:0;font-weight:700;line-height:1.25}
+h2{font-size:17px;margin:0;font-weight:600}
+.mute{color:var(--mute);font-size:14px}
+.step{font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--accent)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}@media(max-width:420px){.grid2{grid-template-columns:1fr}}
+label.f{display:flex;flex-direction:column;gap:5px;font-size:14px;font-weight:500}
+label.f small{font-weight:400;color:var(--mute)}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:15px}.kv dt{color:var(--mute)}.kv dd{margin:0;font-weight:600;word-break:break-word}
+.big{font-size:26px;font-weight:700;letter-spacing:.04em;font-variant-numeric:tabular-nums}
+button,.btn{font:inherit;font-size:16px;font-weight:600;cursor:pointer;border-radius:12px;border:1px solid var(--line);background:var(--panel2);color:var(--fg);padding:12px 16px;text-decoration:none;text-align:center;display:inline-flex;align-items:center;justify-content:center;gap:8px}
+button.go{background:var(--accent);border-color:var(--accent);color:#fff;width:100%}
+button:disabled{opacity:.5}
+.row{display:flex;gap:8px;flex-wrap:wrap}.row>*{flex:1 1 140px}
+.docs{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.doc{aspect-ratio:3/4;border-radius:12px;border:1.5px dashed var(--line);background:var(--panel2);position:relative;overflow:hidden;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;font-size:13px;color:var(--mute);text-align:center;padding:6px}
+.doc img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.doc input{position:absolute;inset:0;opacity:0;cursor:pointer}
+.doc .x{position:absolute;top:4px;right:4px;width:26px;height:26px;padding:0;border-radius:50%;background:rgba(0,0,0,.6);color:#fff;border:0;font-size:15px;z-index:2}
+.doc.busy::after{content:"";position:absolute;inset:0;background:rgba(0,0,0,.45)}
+.doc.busy::before{content:"…";position:absolute;z-index:3;color:#fff;font-size:26px;font-weight:700}
+.plus{font-size:26px;line-height:1;color:var(--accent)}
+.consent{display:flex;gap:10px;align-items:flex-start;font-size:13.5px;color:var(--mute)}.consent input{width:22px;height:22px;flex:none;margin-top:1px}
+.err{color:var(--bad);font-size:14px;font-weight:500}
+.ok{background:color-mix(in srgb,var(--good) 12%,var(--panel));border-color:color-mix(in srgb,var(--good) 40%,var(--line))}
+.lock{background:var(--panel2);border-radius:12px;padding:12px;font-size:14.5px}
+pre{white-space:pre-wrap;font:inherit;margin:0}
+.center{text-align:center;padding:40px 18px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header><div class="logo"><i>D</i><span id="co">Denari</span></div><div class="sp"></div><select class="lang" id="lang" aria-label="Language"></select></header>
+  <main id="app" class="wrap" style="gap:14px"><div class="card center mute">…</div></main>
+</div>
+<script>
+const API="https://zsrddmgiefmuwvcobkin.supabase.co/functions/v1/kv-guest";
+const NAMES={ro:"Română",ru:"Русский",uk:"Українська",en:"English",it:"Italiano",de:"Deutsch",tr:"Türkçe"};
+const T={
+ro:{title:"Check-in online",hello:"Bună ziua{n}!",yours:"Rezervarea dumneavoastră",in:"Check-in",out:"Check-out",from:"de la",until:"până la",guests:"oaspeți",step1:"Pasul 1 din 2 · Date pentru contract",why:"Încheiem un contract de închiriere cu fiecare oaspete. Vă rugăm să completați datele înainte de sosire — durează 2 minute.",first:"Prenume",last:"Nume",phone:"Telefon",email:"E-mail",arrival:"Ora aproximativă a sosirii",others:"Alți oaspeți adulți (nume și prenume)",opt:"opțional",doc:"Fotografia actului de identitate",dochint:"Pașaport (pagina cu fotografie) sau buletin — ambele fețe. Numele și numărul trebuie să fie lizibile.",add:"Adaugă foto",consent:"Sunt de acord ca {c} să prelucreze datele mele personale (nume, telefon, fotografia actului) pentru încheierea contractului de închiriere și înregistrarea șederii. Datele sunt păstrate în siguranță și nu sunt transmise terților, cu excepția cazurilor prevăzute de lege.",send:"Trimite",e_req:"Completați prenumele, numele și telefonul",e_phone:"Verificați numărul de telefon",e_email:"Verificați adresa de e-mail",e_doc:"Adăugați cel puțin o fotografie a actului",e_consent:"Bifați acordul pentru prelucrarea datelor",e_net:"Nu există conexiune. Încercați din nou.",e_up:"Fotografia nu s-a încărcat. Încercați din nou.",e_many:"Prea multe fotografii. Contactați-ne.",thanks:"Mulțumim! Am primit datele.",checked:"Datele au fost verificate ✓",step2:"Pasul 2 din 2 · Instrucțiuni de cazare",address:"Adresa",map:"Deschide harta",entrance:"Scara",floor:"Etaj",flat:"Apartament",parking:"Parcare",code:"Cod / cheie",wifi:"Wi-Fi",pass:"Parolă",later:"Codul ușii și Wi-Fi vor apărea aici în ziua sosirii ({d}). Păstrați acest link.",contact:"Contactați-ne",call:"Sună",rules:"Regulile casei",edit:"Modifică datele",expired:"Linkul nu mai este valabil. Dacă aveți nevoie de ajutor, contactați-ne.",notfound:"Linkul nu a fost găsit. Verificați dacă l-ați copiat complet.",locked:"Datele au fost deja verificate. Pentru modificări, contactați-ne.",copy:"Copiază",copied:"Copiat"},
+ru:{title:"Онлайн-регистрация",hello:"Здравствуйте{n}!",yours:"Ваше бронирование",in:"Заезд",out:"Выезд",from:"с",until:"до",guests:"гостей",step1:"Шаг 1 из 2 · Данные для договора",why:"Мы заключаем договор найма с каждым гостем. Пожалуйста, заполните данные до заезда — это займёт 2 минуты.",first:"Имя",last:"Фамилия",phone:"Телефон",email:"E-mail",arrival:"Примерное время приезда",others:"Другие взрослые гости (имя и фамилия)",opt:"необязательно",doc:"Фото документа",dochint:"Паспорт (страница с фото) или ID-карта — обе стороны. Имя и номер должны читаться.",add:"Добавить фото",consent:"Я даю согласие {c} на обработку моих персональных данных (имя, телефон, фото документа) для заключения договора найма и регистрации проживания. Данные хранятся в защищённом виде и не передаются третьим лицам, кроме случаев, предусмотренных законом.",send:"Отправить",e_req:"Заполните имя, фамилию и телефон",e_phone:"Проверьте номер телефона",e_email:"Проверьте e-mail",e_doc:"Добавьте хотя бы одно фото документа",e_consent:"Отметьте согласие на обработку данных",e_net:"Нет связи. Попробуйте ещё раз.",e_up:"Фото не загрузилось. Попробуйте ещё раз.",e_many:"Слишком много фото. Свяжитесь с нами.",thanks:"Спасибо! Данные получены.",checked:"Данные проверены ✓",step2:"Шаг 2 из 2 · Инструкция по заселению",address:"Адрес",map:"Открыть карту",entrance:"Подъезд",floor:"Этаж",flat:"Квартира",parking:"Парковка",code:"Код / ключ",wifi:"Wi-Fi",pass:"Пароль",later:"Код от двери и Wi-Fi появятся здесь в день заезда ({d}). Сохраните эту ссылку.",contact:"Связаться с нами",call:"Позвонить",rules:"Правила проживания",edit:"Изменить данные",expired:"Ссылка больше не действует. Если нужна помощь — свяжитесь с нами.",notfound:"Ссылка не найдена. Проверьте, что скопировали её полностью.",locked:"Данные уже проверены. Чтобы что-то изменить, свяжитесь с нами.",copy:"Копировать",copied:"Скопировано"},
+uk:{title:"Онлайн-реєстрація",hello:"Вітаємо{n}!",yours:"Ваше бронювання",in:"Заїзд",out:"Виїзд",from:"з",until:"до",guests:"гостей",step1:"Крок 1 з 2 · Дані для договору",why:"Ми укладаємо договір найму з кожним гостем. Будь ласка, заповніть дані до заїзду — це займе 2 хвилини.",first:"Ім'я",last:"Прізвище",phone:"Телефон",email:"E-mail",arrival:"Орієнтовний час приїзду",others:"Інші дорослі гості (ім'я та прізвище)",opt:"необов'язково",doc:"Фото документа",dochint:"Паспорт (сторінка з фото) або ID-картка — обидві сторони. Ім'я та номер мають бути читабельні.",add:"Додати фото",consent:"Я даю згоду {c} на обробку моїх персональних даних (ім'я, телефон, фото документа) для укладення договору найму та реєстрації проживання. Дані зберігаються захищено й не передаються третім особам, окрім випадків, передбачених законом.",send:"Надіслати",e_req:"Заповніть ім'я, прізвище та телефон",e_phone:"Перевірте номер телефону",e_email:"Перевірте e-mail",e_doc:"Додайте хоча б одне фото документа",e_consent:"Позначте згоду на обробку даних",e_net:"Немає зв'язку. Спробуйте ще раз.",e_up:"Фото не завантажилось. Спробуйте ще раз.",e_many:"Забагато фото. Зв'яжіться з нами.",thanks:"Дякуємо! Дані отримано.",checked:"Дані перевірено ✓",step2:"Крок 2 з 2 · Інструкція із заселення",address:"Адреса",map:"Відкрити карту",entrance:"Під'їзд",floor:"Поверх",flat:"Квартира",parking:"Паркування",code:"Код / ключ",wifi:"Wi-Fi",pass:"Пароль",later:"Код від дверей і Wi-Fi з'являться тут у день заїзду ({d}). Збережіть це посилання.",contact:"Зв'язатися з нами",call:"Зателефонувати",rules:"Правила проживання",edit:"Змінити дані",expired:"Посилання більше не дійсне. Якщо потрібна допомога — зв'яжіться з нами.",notfound:"Посилання не знайдено. Перевірте, чи скопіювали його повністю.",locked:"Дані вже перевірено. Щоб щось змінити, зв'яжіться з нами.",copy:"Копіювати",copied:"Скопійовано"},
+en:{title:"Online check-in",hello:"Hello{n}!",yours:"Your booking",in:"Check-in",out:"Check-out",from:"from",until:"until",guests:"guests",step1:"Step 1 of 2 · Details for the rental contract",why:"We sign a short rental contract with every guest. Please fill in your details before arrival — it takes 2 minutes.",first:"First name",last:"Last name",phone:"Phone",email:"Email",arrival:"Estimated arrival time",others:"Other adult guests (first and last name)",opt:"optional",doc:"Photo of your ID document",dochint:"Passport (photo page) or ID card — both sides. Name and number must be readable.",add:"Add photo",consent:"I agree that {c} may process my personal data (name, phone, photo of ID document) to conclude the rental contract and register my stay. The data is stored securely and is not shared with third parties except where required by law.",send:"Submit",e_req:"Please fill in first name, last name and phone",e_phone:"Please check the phone number",e_email:"Please check the email address",e_doc:"Please add at least one photo of your document",e_consent:"Please tick the consent box",e_net:"No connection. Please try again.",e_up:"The photo didn't upload. Please try again.",e_many:"Too many photos. Please contact us.",thanks:"Thank you! We have your details.",checked:"Details verified ✓",step2:"Step 2 of 2 · Check-in instructions",address:"Address",map:"Open map",entrance:"Entrance",floor:"Floor",flat:"Apartment",parking:"Parking",code:"Code / key",wifi:"Wi-Fi",pass:"Password",later:"The door code and Wi-Fi will appear here on your arrival day ({d}). Please keep this link.",contact:"Contact us",call:"Call",rules:"House rules",edit:"Edit details",expired:"This link is no longer active. If you need help, please contact us.",notfound:"Link not found. Please check that you copied it completely.",locked:"Your details are already verified. To change anything, please contact us.",copy:"Copy",copied:"Copied"},
+it:{title:"Check-in online",hello:"Buongiorno{n}!",yours:"La sua prenotazione",in:"Check-in",out:"Check-out",from:"dalle",until:"entro le",guests:"ospiti",step1:"Passo 1 di 2 · Dati per il contratto",why:"Stipuliamo un contratto di locazione con ogni ospite. La preghiamo di compilare i dati prima dell'arrivo — bastano 2 minuti.",first:"Nome",last:"Cognome",phone:"Telefono",email:"E-mail",arrival:"Orario di arrivo previsto",others:"Altri ospiti adulti (nome e cognome)",opt:"facoltativo",doc:"Foto del documento d'identità",dochint:"Passaporto (pagina con la foto) o carta d'identità — fronte e retro. Nome e numero devono essere leggibili.",add:"Aggiungi foto",consent:"Acconsento al trattamento dei miei dati personali (nome, telefono, foto del documento) da parte di {c} per la stipula del contratto di locazione e la registrazione del soggiorno. I dati sono conservati in modo sicuro e non vengono ceduti a terzi, salvo nei casi previsti dalla legge.",send:"Invia",e_req:"Compili nome, cognome e telefono",e_phone:"Controlli il numero di telefono",e_email:"Controlli l'indirizzo e-mail",e_doc:"Aggiunga almeno una foto del documento",e_consent:"Spunti il consenso al trattamento dei dati",e_net:"Nessuna connessione. Riprovi.",e_up:"La foto non è stata caricata. Riprovi.",e_many:"Troppe foto. Ci contatti.",thanks:"Grazie! Abbiamo ricevuto i dati.",checked:"Dati verificati ✓",step2:"Passo 2 di 2 · Istruzioni per il check-in",address:"Indirizzo",map:"Apri la mappa",entrance:"Scala",floor:"Piano",flat:"Appartamento",parking:"Parcheggio",code:"Codice / chiave",wifi:"Wi-Fi",pass:"Password",later:"Il codice della porta e il Wi-Fi compariranno qui il giorno dell'arrivo ({d}). Conservi questo link.",contact:"Contattaci",call:"Chiama",rules:"Regole della casa",edit:"Modifica i dati",expired:"Il link non è più attivo. Se ha bisogno di aiuto, ci contatti.",notfound:"Link non trovato. Verifichi di averlo copiato per intero.",locked:"I dati sono già stati verificati. Per modifiche, ci contatti.",copy:"Copia",copied:"Copiato"},
+de:{title:"Online-Check-in",hello:"Guten Tag{n}!",yours:"Ihre Buchung",in:"Anreise",out:"Abreise",from:"ab",until:"bis",guests:"Gäste",step1:"Schritt 1 von 2 · Angaben für den Mietvertrag",why:"Wir schließen mit jedem Gast einen kurzen Mietvertrag. Bitte füllen Sie Ihre Daten vor der Anreise aus — das dauert 2 Minuten.",first:"Vorname",last:"Nachname",phone:"Telefon",email:"E-Mail",arrival:"Voraussichtliche Ankunftszeit",others:"Weitere erwachsene Gäste (Vor- und Nachname)",opt:"optional",doc:"Foto des Ausweisdokuments",dochint:"Reisepass (Seite mit Foto) oder Personalausweis — beide Seiten. Name und Nummer müssen lesbar sein.",add:"Foto hinzufügen",consent:"Ich willige ein, dass {c} meine personenbezogenen Daten (Name, Telefon, Foto des Ausweises) zum Abschluss des Mietvertrags und zur Registrierung des Aufenthalts verarbeitet. Die Daten werden sicher gespeichert und nicht an Dritte weitergegeben, außer wenn das Gesetz es verlangt.",send:"Absenden",e_req:"Bitte Vorname, Nachname und Telefon ausfüllen",e_phone:"Bitte Telefonnummer prüfen",e_email:"Bitte E-Mail-Adresse prüfen",e_doc:"Bitte mindestens ein Foto des Dokuments hinzufügen",e_consent:"Bitte die Einwilligung bestätigen",e_net:"Keine Verbindung. Bitte erneut versuchen.",e_up:"Das Foto wurde nicht hochgeladen. Bitte erneut versuchen.",e_many:"Zu viele Fotos. Bitte kontaktieren Sie uns.",thanks:"Vielen Dank! Ihre Daten sind angekommen.",checked:"Daten geprüft ✓",step2:"Schritt 2 von 2 · Check-in-Anleitung",address:"Adresse",map:"Karte öffnen",entrance:"Eingang",floor:"Etage",flat:"Wohnung",parking:"Parken",code:"Code / Schlüssel",wifi:"WLAN",pass:"Passwort",later:"Türcode und WLAN erscheinen hier am Anreisetag ({d}). Bitte bewahren Sie diesen Link auf.",contact:"Kontakt",call:"Anrufen",rules:"Hausregeln",edit:"Daten ändern",expired:"Dieser Link ist nicht mehr gültig. Wenn Sie Hilfe brauchen, kontaktieren Sie uns.",notfound:"Link nicht gefunden. Bitte prüfen Sie, ob er vollständig kopiert wurde.",locked:"Ihre Daten wurden bereits geprüft. Für Änderungen kontaktieren Sie uns bitte.",copy:"Kopieren",copied:"Kopiert"},
+tr:{title:"Online check-in",hello:"Merhaba{n}!",yours:"Rezervasyonunuz",in:"Giriş",out:"Çıkış",from:"saat",until:"saate kadar",guests:"misafir",step1:"Adım 1/2 · Kira sözleşmesi için bilgiler",why:"Her misafirle kısa bir kira sözleşmesi yapıyoruz. Lütfen bilgilerinizi gelmeden önce doldurun — 2 dakika sürer.",first:"Ad",last:"Soyad",phone:"Telefon",email:"E-posta",arrival:"Tahmini varış saati",others:"Diğer yetişkin misafirler (ad ve soyad)",opt:"isteğe bağlı",doc:"Kimlik belgesinin fotoğrafı",dochint:"Pasaport (fotoğraflı sayfa) veya kimlik kartı — iki yüzü. Ad ve numara okunaklı olmalı.",add:"Fotoğraf ekle",consent:"{c} tarafından kişisel verilerimin (ad, telefon, kimlik fotoğrafı) kira sözleşmesinin yapılması ve konaklamanın kaydı amacıyla işlenmesine onay veriyorum. Veriler güvenli şekilde saklanır ve yasanın gerektirdiği durumlar dışında üçüncü kişilerle paylaşılmaz.",send:"Gönder",e_req:"Lütfen ad, soyad ve telefonu doldurun",e_phone:"Lütfen telefon numarasını kontrol edin",e_email:"Lütfen e-posta adresini kontrol edin",e_doc:"Lütfen belgenin en az bir fotoğrafını ekleyin",e_consent:"Lütfen onay kutusunu işaretleyin",e_net:"Bağlantı yok. Lütfen tekrar deneyin.",e_up:"Fotoğraf yüklenemedi. Lütfen tekrar deneyin.",e_many:"Çok fazla fotoğraf. Lütfen bizimle iletişime geçin.",thanks:"Teşekkürler! Bilgileriniz alındı.",checked:"Bilgiler doğrulandı ✓",step2:"Adım 2/2 · Giriş talimatları",address:"Adres",map:"Haritayı aç",entrance:"Giriş",floor:"Kat",flat:"Daire",parking:"Otopark",code:"Kod / anahtar",wifi:"Wi-Fi",pass:"Şifre",later:"Kapı kodu ve Wi-Fi bilgileri varış gününüzde ({d}) burada görünecek. Lütfen bu bağlantıyı saklayın.",contact:"Bize ulaşın",call:"Ara",rules:"Ev kuralları",edit:"Bilgileri değiştir",expired:"Bu bağlantı artık geçerli değil. Yardıma ihtiyacınız varsa bize ulaşın.",notfound:"Bağlantı bulunamadı. Tamamını kopyaladığınızdan emin olun.",locked:"Bilgileriniz zaten doğrulandı. Değişiklik için bize ulaşın.",copy:"Kopyala",copied:"Kopyalandı"}
+};
+const q=new URLSearchParams(location.search), TOKEN=q.get("t")||"";
+let L=pickLang(q.get("l")), D=null, docs=[], editing=false, err="";
+function pickLang(x){for(const c of [x,...(navigator.languages||[navigator.language||""])]){const k=(c||"").slice(0,2).toLowerCase();if(T[k])return k;if(k==="mo")return "ro"}return "en"}
+const t=k=>T[L][k]??T.en[k];
+const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const fmt=s=>new Date(s+"T12:00:00").toLocaleDateString(L==="uk"?"uk-UA":L,{weekday:"short",day:"numeric",month:"long"});
+const pick=o=>o&&(o[L]||o.en||o.ru||o.ro||Object.values(o)[0]||"");
+async function call(action,body={}){
+  let r;try{r=await fetch(API,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({action,t:TOKEN,...body})})}catch(e){throw new Error("net")}
+  const j=await r.json().catch(()=>({error:"net"}));if(!r.ok||j.error)throw new Error(j.error||"net");return j.data;
+}
+function setLang(l){L=l;document.documentElement.lang=l;document.title=t("title");try{localStorage.setItem("g_lang",l)}catch(e){}render()}
+const sel=document.getElementById("lang");sel.innerHTML=Object.entries(NAMES).map(([k,n])=>`<option value="${k}">${n}</option>`).join("");
+sel.onchange=()=>setLang(sel.value);
+
+async function boot(){
+  try{const s=localStorage.getItem("g_lang");if(s&&T[s]&&!q.get("l"))L=s}catch(e){}
+  if(!TOKEN){return msg(t("notfound"))}
+  try{D=await call("get")}catch(e){return msg(e.message==="not_found"?t("notfound"):t("e_net"))}
+  if(!q.get("l")&&D.lang&&T[D.lang]){try{if(!localStorage.getItem("g_lang"))L=D.lang}catch(e){L=D.lang}}
+  setLang(L);
+}
+function msg(m){document.getElementById("app").innerHTML=`<div class="card center">${esc(m)}</div>`}
+
+function contact(){if(!D.contact)return "";const n=D.contact.replace(/[^\d+]/g,"");return `<div class="card"><h2>${t("contact")}</h2><div class="row"><a class="btn" href="tel:${esc(n)}">📞 ${t("call")}</a><a class="btn" href="https://wa.me/${esc(n.replace(/\D/g,""))}" target="_blank" rel="noopener">WhatsApp</a><a class="btn" href="viber://chat?number=${encodeURIComponent(n)}">Viber</a></div><div class="mute">${esc(D.contact)}</div></div>`}
+
+function summary(){
+  const rows=[[t("in"),`${fmt(D.checkin)}, ${t("from")} ${esc(D.checkin_from)}`],[t("out"),`${fmt(D.checkout)}, ${t("until")} ${esc(D.checkout_until)}`]];
+  if(D.address) rows.push([t("address"),esc(D.address)]);
+  for(const k of ["entrance","floor","flat","parking"]) if(D[k]) rows.push([t(k),esc(D[k])]);
+  return `<div class="card"><h1>${t("hello").replace("{n}",D.hint?", "+esc(D.hint):"")}</h1><div class="mute">${t("yours")} · ${esc(D.apt)}${D.guests?` · ${D.guests} ${t("guests")}`:""}</div>
+  <dl class="kv">${rows.map(([a,b])=>`<dt>${a}</dt><dd>${b}</dd>`).join("")}</dl>
+  ${D.map?`<a class="btn" href="${esc(D.map)}" target="_blank" rel="noopener">📍 ${t("map")}</a>`:""}</div>`;
+}
+function form(){
+  const g=D.guest||{};
+  return `<form class="card" id="f" novalidate><div class="step">${t("step1")}</div><div class="mute">${t("why")}</div>
+  <div class="grid2"><label class="f">${t("first")}<input id="fn" autocomplete="given-name" value="${esc(g.first_name)}" required></label><label class="f">${t("last")}<input id="ln" autocomplete="family-name" value="${esc(g.last_name)}" required></label></div>
+  <div class="grid2"><label class="f">${t("phone")}<input id="ph" type="tel" inputmode="tel" autocomplete="tel" placeholder="+373 …" value="${esc(g.phone)}" required></label><label class="f">${t("arrival")} <small>${t("opt")}</small><input id="ar" placeholder="15:00" value="${esc(g.arrival_time)}"></label></div>
+  <label class="f">${t("email")} <small>${t("opt")}</small><input id="em" type="email" autocomplete="email" value="${esc(g.email)}"></label>
+  <label class="f">${t("others")} <small>${t("opt")}</small><input id="ot" value="${esc(g.others)}"></label>
+  <div class="f" style="display:flex;flex-direction:column;gap:5px;font-size:14px;font-weight:500">${t("doc")}<small class="mute" style="font-weight:400">${t("dochint")}</small></div>
+  <div class="docs">${docs.map((d,i)=>`<div class="doc ${d.busy?"busy":""}"><img src="${d.url}" alt=""><button type="button" class="x" data-rm="${i}" aria-label="×">×</button></div>`).join("")}
+    ${docs.length<6?`<label class="doc"><span class="plus">+</span>${t("add")}<input type="file" accept="image/*" id="docin"></label>`:""}</div>
+  <label class="consent"><input type="checkbox" id="cs">${esc(t("consent").replace("{c}",D.company||"Denari"))}</label>
+  ${err?`<div class="err">${esc(err)}</div>`:""}
+  <button class="go" type="submit" id="sb" ${docs.some(d=>d.busy)?"disabled":""}>${t("send")}</button></form>`;
+}
+function instructions(){
+  const s=D.secret, done=D.status==="checked";
+  let h=`<div class="card ok"><h2>${done?t("checked"):t("thanks")}</h2><div class="mute">${esc(D.guest.first_name)} ${esc(D.guest.last_name)} · ${esc(D.guest.phone)}</div>
+    ${done?"":`<button type="button" data-edit="1">${t("edit")}</button>`}</div>
+    <div class="card"><div class="step">${t("step2")}</div>`;
+  if(!s){h+=`<div class="lock">🔒 ${esc(t("later").replace("{d}",fmt(D.checkin)))}</div>`}
+  else{
+    if(s.code) h+=`<div><div class="mute">${t("code")}</div><div class="big">${esc(s.code)}</div></div>`;
+    if(s.key_info) h+=`<div>${esc(s.key_info)}</div>`;
+    if(s.wifi_name) h+=`<dl class="kv"><dt>${t("wifi")}</dt><dd>${esc(s.wifi_name)}</dd>${s.wifi_pass?`<dt>${t("pass")}</dt><dd>${esc(s.wifi_pass)} <button type="button" style="padding:4px 10px;font-size:13px" data-copy="${esc(s.wifi_pass)}">${t("copy")}</button></dd>`:""}</dl>`;
+    const n=pick(s.notes); if(n) h+=`<pre>${esc(n)}</pre>`;
+  }
+  return h+`</div>`;
+}
+function render(){
+  sel.value=L; document.getElementById("co").textContent=D?.company||"Denari";
+  if(!D) return;
+  if(D.expired) return msg(t("expired"));
+  const showForm=!D.filled||editing;
+  const rules=pick(D.rules);
+  document.getElementById("app").innerHTML=summary()+(showForm?form():instructions())+(rules?`<div class="card"><h2>${t("rules")}</h2><pre class="mute">${esc(rules)}</pre></div>`:"")+contact();
+}
+
+async function compress(file){
+  const img=await createImageBitmap(file).catch(()=>null);if(!img)return file;
+  const s=Math.min(1,2000/Math.max(img.width,img.height)),c=document.createElement("canvas");c.width=Math.round(img.width*s);c.height=Math.round(img.height*s);
+  c.getContext("2d").drawImage(img,0,0,c.width,c.height);return await new Promise(r=>c.toBlob(b=>r(b||file),"image/jpeg",.85));
+}
+async function put(url,blob){for(let i=0;i<3;i++){try{const r=await fetch(url,{method:"PUT",headers:{"content-type":"image/jpeg","x-upsert":"true"},body:blob});if(r.ok)return true}catch(e){}await new Promise(r=>setTimeout(r,1500*(i+1)))}return false}
+function keep(){const v=id=>document.getElementById(id)?.value;if(!document.getElementById("fn"))return;D.guest={...(D.guest||{}),first_name:v("fn"),last_name:v("ln"),phone:v("ph"),arrival_time:v("ar"),email:v("em"),others:v("ot")};D._cs=document.getElementById("cs")?.checked}
+function rerender(){keep();const cs=D._cs;render();if(cs&&document.getElementById("cs"))document.getElementById("cs").checked=true}
+
+document.addEventListener("change",async e=>{
+  if(e.target.id!=="docin")return;const f=e.target.files[0];if(!f)return;
+  const d={url:URL.createObjectURL(f),busy:true};docs.push(d);err="";rerender();
+  try{const blob=await compress(f);const u=await call("upload_url");if(!await put(u.url,blob))throw new Error("up");d.path=u.path;d.url=URL.createObjectURL(blob)}
+  catch(x){docs=docs.filter(z=>z!==d);err=x.message==="too_many"?t("e_many"):t("e_up")}
+  d.busy=false;rerender();
+});
+document.addEventListener("click",async e=>{
+  const b=e.target.closest("button");if(!b)return;
+  if(b.dataset.rm){docs.splice(+b.dataset.rm,1);rerender()}
+  else if(b.dataset.edit){editing=true;docs=[];err="";render()}
+  else if(b.dataset.copy){try{await navigator.clipboard.writeText(b.dataset.copy);b.textContent=t("copied")}catch(_){}}
+});
+document.addEventListener("submit",async e=>{
+  e.preventDefault();keep();const g=D.guest;err="";
+  if(!g.first_name?.trim()||!g.last_name?.trim()||!g.phone?.trim())err=t("e_req");
+  else if(g.phone.replace(/\D/g,"").length<6)err=t("e_phone");
+  else if(g.email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(g.email))err=t("e_email");
+  else if(!docs.filter(d=>d.path).length)err=t("e_doc");
+  else if(!D._cs)err=t("e_consent");
+  if(err)return rerender();
+  const sb=document.getElementById("sb");sb.disabled=true;sb.textContent="…";
+  try{D=await call("submit",{first_name:g.first_name,last_name:g.last_name,phone:g.phone,email:g.email||null,arrival_time:g.arrival_time||null,others:g.others||null,doc_paths:docs.filter(d=>d.path).map(d=>d.path),consent:true,lang:L});editing=false;docs=[];render();scrollTo({top:0,behavior:"smooth"})}
+  catch(x){const m={phone:"e_phone",email:"e_email",doc:"e_doc",consent:"e_consent",name:"e_req",checked:"locked",expired:"expired"}[x.message];err=t(m||"e_net");rerender()}
+});
+boot();
+</script>
+</body>
+</html>

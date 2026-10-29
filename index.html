@@ -43,7 +43,7 @@ button.sm{padding:5px 9px;font-size:13px}
 .flow{display:grid;grid-template-columns:1fr 1fr;gap:8px}@media(max-width:480px){.flow{grid-template-columns:1fr}}
 .leg{background:var(--panel2);border-radius:10px;padding:8px 10px;min-width:0}.leg .l{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--dim);font-weight:600}.leg .v{font-weight:600}.leg .m{color:var(--mute);font-size:13px}
 select,input,textarea{font:inherit;font-size:15px;background:var(--panel2);color:var(--fg);border:1px solid var(--line);border-radius:9px;padding:8px 10px;min-width:0;width:100%}
-label.f{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--mute);flex:1 1 140px}
+label.f{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--mute);flex:1 1 140px}.sheet>label.f,form.sheet>label.f{flex:none}
 .photos{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
 .ph{aspect-ratio:1;border-radius:9px;border:1px dashed var(--line);background:var(--panel2);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:11.5px;color:var(--mute);text-align:center;position:relative;overflow:hidden;padding:4px}
 .ph.done{border-style:solid;border-color:var(--good)}.ph img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}.ph input{position:absolute;inset:0;opacity:0}
@@ -128,6 +128,8 @@ async function load(){
     if(ui.tab==="rep") cache.repairs=await call("repairs");
     if(ui.tab==="cal"){if(!ui.cal)ui.cal=today(-2);cache.cal=await call("calendar",{from:ui.cal,to:shiftDate(ui.cal,13)})}
     if(ui.tab==="team") cache.staff=await call("staff");
+    if(ui.tab==="guests"){if(!ui.gfrom)ui.gfrom=today(-1);cache.guests=(await call("guests",{from:ui.gfrom,to:shiftDate(ui.gfrom,14)})).map(g=>({...g,id:+g.id}));
+      if(ui.sheet==="gset")cache.gset=await call("guest_settings");if(ui.sheet==="ainfo")cache.ainfo=await call("apt_info")}
     if(ui.tab==="sal"){if(!ui.wk)ui.wk=weekOf(today(-7));cache.pay=await call("payroll",{from:ui.wk[0],to:ui.wk[1]});if(ui.sheet==="rates")cache.rates=await call("apt_rates")}
     if(ui.tab==="money") cache.money=await call("money",{from:ui.date.slice(0,8)+"01",to:ui.date});
   }catch(e){toast(e.message,1)}
@@ -135,14 +137,14 @@ async function load(){
 }
 function tabs(){
   const t=me.role==="cleaner"?[["day","Мои уборки"],["rep","Ремонт"]]:me.role==="master"?[["rep","Ремонт"]]:me.role==="dispatcher"?[["day","График"],["cal","Календарь"],["rep","Ремонт"]]:me.role==="manager"?[["day","График"],["cal","Календарь"],["pay","Оплаты"]]:
-    [["day","График"],["cal","Календарь"],["pay","Оплаты"],["sal","Зарплаты"],["rep","Ремонт"],["team","Команда"]].concat(me.role==="owner"?[["money","Деньги"]]:[]);
+    [["day","График"],["cal","Календарь"],["guests","Гости"],["pay","Оплаты"],["sal","Зарплаты"],["rep","Ремонт"],["team","Команда"]].concat(me.role==="owner"?[["money","Деньги"]]:[]);
   return t.map(([k,n])=>`<button class="${ui.tab===k?"on":""}" data-tab="${k}">${n}</button>`).join("");
 }
 function dateNav(){return `<div class="dnav"><button class="sm" data-d="-1">‹</button><b>${ru(ui.date)}${ui.date===today()?" · сегодня":ui.date===today(1)?" · завтра":""}</b><button class="sm" data-d="1">›</button></div>`}
 
 function legs(x){
   const o=x.out?`<div class="leg"><div class="l">Выезд</div><div class="v">${esc(x.out.name||"гость")}${x.out.time?" · "+esc(x.out.time):""}</div></div>`:`<div class="leg"><div class="l">Выезд</div><div class="m">нет</div></div>`;
-  const i=x.in?`<div class="leg"><div class="l">Заезд ${x.in.source==="extra"?chip("Экстра","var(--pink)"):""} ${x.in.no_show?chip("Незаезд","var(--bad)"):""}</div><div class="v">${esc(x.in.name||"гость")} · ${x.in.guests??"?"} взр · ${x.in.nights} ${x.in.nights>1?"ночи":"ночь"}${x.in.time?" · "+esc(x.in.time):""}</div>${isAdmin()&&x.in.price!=null?`<div class="m">${payLabel(x.in)} · ${x.in.price} ${x.in.currency}</div>`:""}</div>`
+  const i=x.in?`<div class="leg"><div class="l">Заезд ${x.in.source==="extra"?chip("Экстра","var(--pink)"):""} ${x.in.no_show?chip("Незаезд","var(--bad)"):""} ${isAdmin()&&x.in.guest_status?chip(GS[x.in.guest_status][0],GS[x.in.guest_status][1]):""}</div><div class="v">${esc(x.in.name||"гость")} · ${x.in.guests??"?"} взр · ${x.in.nights} ${x.in.nights>1?"ночи":"ночь"}${x.in.time?" · "+esc(x.in.time):""}</div>${isAdmin()&&x.in.price!=null?`<div class="m">${payLabel(x.in)} · ${x.in.price} ${x.in.currency}</div>`:""}</div>`
     :x.stay_until?`<div class="leg"><div class="l">Проживают</div><div class="v">до ${dm(x.stay_until)}</div></div>`
     :`<div class="leg"><div class="l">Заезд</div><div class="v">Подготовить на ${x.cleaning?.prep??"?"}</div></div>`;
   return `<div class="flow">${o}${i}</div>`;
@@ -301,7 +303,7 @@ function viewCal(){
     ${bs.map(b=>{const si=b.checkin<ui.cal?0:di(b.checkin), ei=b.checkout>last?14:di(b.checkout);if(si<0||ei<0&&b.checkout<=last)return "";const e=ei<0?14:ei;
       const ml=b.checkin<ui.cal?0:23, mr=b.checkout>last?0:23;
       return `<button class="bk ${b.source==="extra"?"ex":""} ${b.no_show?"ns":""}" style="grid-column:${si+2}/${b.checkout>last?16:e+3};margin-left:${ml}px;margin-right:${mr}px" data-bk="${b.id}">${esc(b.guest_name||"гость")}${b.guests?" · "+b.guests:""}</button>`}).join("")}</div>`};
-  const sel=ui.bk&&c.bookings.find(b=>b.id===ui.bk), selApt=sel&&c.apts.find(a=>a.id===sel.apartment_id);
+  const sel=ui.bk&&c.bookings.find(b=>+b.id===ui.bk), selApt=sel&&c.apts.find(a=>a.id===sel.apartment_id);
   return `<div class="dnav"><button class="sm" data-cal="-7">‹</button><b>${dm(ui.cal)} – ${dm(last)}</b><button class="sm" data-cal="7">›</button></div>
   <div class="bar"><span class="chip" style="--c:var(--accent)">Booking</span><span class="chip" style="--c:var(--pink)">Экстра</span><span class="note">● уборка: серая — ждёт, синяя — убирают, фиолетовая — проверка, зелёная — принята</span></div>
   <div class="cal"><div class="crow chead"><div class="cname">Квартира</div>${days.map((d,i)=>`<div ${cells(d)} style="grid-column:${i+2}" data-goday="${d}">${["вс","пн","вт","ср","чт","пт","сб"][wd(d)]}<b>${+d.slice(8,10)}</b></div>`).join("")}</div>
@@ -311,9 +313,84 @@ function viewCal(){
   ${sel?`<div class="sheet"><b>${esc(selApt?.name)} · ${esc(sel.guest_name||"гость")}</b><div class="note">${dm(sel.checkin)} → ${dm(sel.checkout)} · ${sel.guests??"?"} взр${sel.checkin_time?" · заезд "+esc(sel.checkin_time):""} · ${sel.source==="extra"?"экстра":"Booking"}${sel.price!=null?` · ${sel.price} ${sel.currency}`:""}${sel.no_show?" · незаезд":""}</div><div class="bar"><button class="sm" data-goday="${sel.checkin}">Открыть день заезда</button><button class="sm" data-act="closebk">Закрыть</button></div></div>`:""}`;
 }
 
+// ---------- Гости ----------
+const GUEST_URL="https://ryfexpro.github.io/denari-kv/g.html";
+const GS={none:["📋 не отправлено","var(--mute)"],sent:["📋 ждём данные","var(--amber)"],filled:["📋 заполнено — проверить","var(--violet)"],checked:["📋 проверено","var(--good)"]};
+const GL={ro:"Română",ru:"Русский",uk:"Українська",en:"English",it:"Italiano",de:"Deutsch",tr:"Türkçe"};
+const GMSG={
+  ro:(n,a,d1,d2,u)=>`Bună ziua${n?", "+n:""}! Vă mulțumim pentru rezervare: ${a}, ${d1} – ${d2}.\nVă rugăm să completați check-in-ul online înainte de sosire (2 minute): ${u}\nDupă completare veți vedea instrucțiunile de cazare, iar în ziua sosirii — codul ușii și Wi-Fi.`,
+  ru:(n,a,d1,d2,u)=>`Здравствуйте${n?", "+n:""}! Спасибо за бронирование: ${a}, ${d1} – ${d2}.\nПожалуйста, пройдите онлайн-регистрацию до заезда (2 минуты): ${u}\nПосле этого вы увидите инструкцию по заселению, а в день заезда — код от двери и Wi-Fi.`,
+  uk:(n,a,d1,d2,u)=>`Вітаємо${n?", "+n:""}! Дякуємо за бронювання: ${a}, ${d1} – ${d2}.\nБудь ласка, пройдіть онлайн-реєстрацію до заїзду (2 хвилини): ${u}\nПісля цього ви побачите інструкцію із заселення, а в день заїзду — код від дверей і Wi-Fi.`,
+  en:(n,a,d1,d2,u)=>`Hello${n?" "+n:""}! Thank you for your booking: ${a}, ${d1} – ${d2}.\nPlease complete the online check-in before arrival (2 minutes): ${u}\nAfter that you'll see the check-in instructions, and on your arrival day — the door code and Wi-Fi.`,
+  it:(n,a,d1,d2,u)=>`Buongiorno${n?" "+n:""}! Grazie per la prenotazione: ${a}, ${d1} – ${d2}.\nLa preghiamo di completare il check-in online prima dell'arrivo (2 minuti): ${u}\nDopo vedrà le istruzioni per il check-in e, il giorno dell'arrivo, il codice della porta e il Wi-Fi.`,
+  de:(n,a,d1,d2,u)=>`Guten Tag${n?" "+n:""}! Vielen Dank für Ihre Buchung: ${a}, ${d1} – ${d2}.\nBitte erledigen Sie vor der Anreise den Online-Check-in (2 Minuten): ${u}\nDanach sehen Sie die Check-in-Anleitung und am Anreisetag den Türcode und das WLAN.`,
+  tr:(n,a,d1,d2,u)=>`Merhaba${n?" "+n:""}! Rezervasyonunuz için teşekkürler: ${a}, ${d1} – ${d2}.\nLütfen gelmeden önce online check-in yapın (2 dakika): ${u}\nArdından giriş talimatlarını, varış gününüzde ise kapı kodunu ve Wi-Fi bilgilerini göreceksiniz.`
+};
+function guessLang(ph){const d=String(ph||"").replace(/\D/g,"");const m=[["380","uk"],["373","ro"],["40","ro"],["375","ru"],["7","ru"],["39","it"],["49","de"],["43","de"],["41","de"],["90","tr"]].find(([p])=>d.startsWith(p));return m?m[1]:"ru"}
+function guestMsg(g,lang){const u=`${GUEST_URL}?t=${g.guest_token}&l=${lang}`;const n=String(g.guest_name||"").split(" ")[0];return GMSG[lang](n,g.apt,dm(g.checkin),dm(g.checkout),u)}
+function viewGuests(){
+  const list=cache.guests||[], cnt=s=>list.filter(g=>!g.no_show&&g.guest_status===s).length;
+  const by={};for(const g of list)(by[g.checkin]=by[g.checkin]||[]).push(g);
+  return `<div class="dnav"><button class="sm" data-gw="-7">‹</button><b>Заезды ${dm(ui.gfrom)} – ${dm(shiftDate(ui.gfrom,14))}</b><button class="sm" data-gw="7">›</button></div>
+  <div class="stats"><div class="st"><b>${cnt("none")}</b><span>не отправлено</span></div><div class="st"><b style="color:var(--amber)">${cnt("sent")}</b><span>ждём данные</span></div><div class="st"><b style="color:var(--violet)">${cnt("filled")}</b><span>проверить</span></div><div class="st"><b style="color:var(--good)">${cnt("checked")}</b><span>проверено</span></div></div>
+  <div class="bar"><button class="sm" data-act="ainfo">${ui.sheet==="ainfo"?"Скрыть инструкции":"Инструкции квартир"}</button><button class="sm" data-act="gset">${ui.sheet==="gset"?"Скрыть настройки":"Настройки для гостей"}</button></div>
+  ${ui.sheet==="ainfo"?aptInfoForm():""}${ui.sheet==="gset"?guestSetForm():""}
+  <p class="note">Отправь гостю ссылку → он выбирает язык, вводит имя, фамилию, телефон и фото документа. Тебе придёт уведомление. Код двери и Wi-Fi гость увидит только после заполнения и только в день заезда.</p>
+  ${!list.length?`<div class="empty">Заездов в эти дни нет.</div>`:""}
+  ${Object.keys(by).sort().map(d=>`<h2 style="margin:6px 0 0;font-size:13px;color:var(--mute);text-transform:uppercase;letter-spacing:.07em">${ru(d)}</h2>${by[d].map(guestCard).join("")}`).join("")}`;
+}
+function guestCard(g){
+  const [sn,sc]=GS[g.guest_status]||GS.none, G=g.guest, lang=ui.glang?.[g.id]||g.guest_lang||guessLang(G?.phone||g.guest_phone);
+  return `<div class="card" style="--sc:${g.no_show?"var(--line)":sc}">
+  <div class="h"><span class="apt">${esc(g.apt)}</span>${g.no_show?chip("Незаезд","var(--bad)"):chip(sn,sc)}</div>
+  <div class="note">${esc(g.guest_name||"гость")} · ${dm(g.checkin)} → ${dm(g.checkout)} · ${g.guests??"?"} взр · ${g.source==="extra"?"экстра":"Booking"}${g.guest_sent_at?` · ссылка отправлена ${new Date(g.guest_sent_at).toLocaleDateString("ru-RU")}`:""}</div>
+  ${G?`<div class="leg"><div class="l">Данные для договора</div><div class="v">${esc(G.first_name)} ${esc(G.last_name)}</div>
+    <div class="m">${esc(G.phone)}${G.email?" · "+esc(G.email):""}${G.arrival_time?" · приезд ~"+esc(G.arrival_time):""}</div>
+    ${G.others?`<div class="m">Ещё гости: ${esc(G.others)}</div>`:""}
+    <div class="m">${G.docs_deleted_at?"Фото документов удалены "+new Date(G.docs_deleted_at).toLocaleDateString("ru-RU"):`Фото документа: ${G.docs}`}${G.checked_at?` · проверил(а) ${esc(G.checked_by||"")}`:""}</div></div>
+    <div class="bar">${G.docs?`<button class="sm" data-gdocs="${g.id}">${ui.open==="gd"+g.id?"Скрыть документ":"Документ"}</button>`:""}
+      ${g.guest_status==="checked"?`<button class="sm" data-gunchk="${g.id}">Снять отметку</button>`:`<button class="sm go" data-gchk="${g.id}">Проверено ✓</button>`}
+      ${G.docs?`<button class="sm warn" data-gxdel="${g.id}">Удалить фото документа</button>`:""}</div>
+    ${ui.open==="gd"+g.id?(cache.gdocs?.[g.id]?`<div class="gal">${cache.gdocs[g.id].map(u=>`<a href="${u}" target="_blank" rel="noopener"><img src="${u}" alt="документ"></a>`).join("")}</div><div class="note">Ссылки на фото действуют 5 минут. Каждый просмотр записывается в журнал.</div>`:`<div class="note">Загружаю…</div>`):""}
+    ${ui.sheet==="gx"+g.id?`<div class="sheet"><b>Удалить фото документа?</b><p class="note">Фото удалятся навсегда. Имя, фамилия и телефон останутся для договора.</p><div class="bar"><button class="go" data-gdodel="${g.id}">Удалить</button><button data-act="close">Отмена</button></div></div>`:""}`:""}
+  ${g.no_show?"":`<div class="bar"><button class="sm ${G?"":"go"}" data-gsend="${g.id}">${g.guest_status==="none"?"Отправить гостю":"Ссылка гостю"}</button></div>`}
+  ${ui.sheet==="gs"+g.id&&g.guest_token?`<div class="sheet"><label class="f">Язык сообщения<select data-glang="${g.id}">${Object.entries(GL).map(([k,n])=>`<option value="${k}" ${k===lang?"selected":""}>${n}</option>`).join("")}</select></label>
+    <pre id="gm${g.id}">${esc(guestMsg(g,lang))}</pre>
+    <div class="bar"><button class="go" data-gcopy="${g.id}" data-l="${lang}">Копировать</button>${(G?.phone||g.guest_phone)?`<button data-gwa="${g.id}" data-l="${lang}">WhatsApp</button><button data-gvb="${g.id}" data-l="${lang}">Viber</button>`:""}<button data-act="close">Закрыть</button></div>
+    <p class="note">Для гостей Booking: скопируй и вставь в чат с гостем в экстранете Booking. После Beds24 это будет уходить автоматически.</p></div>`:""}
+  </div>`;
+}
+function aptInfoForm(){
+  const list=cache.ainfo;if(!list)return `<div class="note">Загружаю…</div>`;
+  const id=ui.aid||list[0]?.id, a=list.find(x=>x.id===id)||list[0], I=a?.info||{}, N=I.notes||{};
+  const f=(k,n,ph="")=>`<label class="f">${n}<input data-ai="${k}" value="${esc(I[k]||"")}" placeholder="${esc(ph)}"></label>`;
+  return `<form class="sheet" id="aif"><b>Инструкция для гостей</b>
+  <label class="f">Квартира<select data-aisel="1">${list.map(x=>`<option value="${x.id}" ${x.id===a?.id?"selected":""}>${esc(x.name)}${Object.keys(x.info||{}).length?" ✓":""}</option>`).join("")}</select></label>
+  <p class="note">Видно гостю сразу: адрес, подъезд, этаж, квартира, парковка, время. Только после заполнения данных и в день заезда: код, ключ, Wi-Fi, заметки.</p>
+  <div class="grid">${f("address","Адрес",a?.address||"str. Alba Iulia 96")}${f("map_url","Ссылка на карту","https://maps.app.goo.gl/…")}${f("entrance","Подъезд")}${f("floor","Этаж")}${f("flat","Квартира №")}${f("parking","Парковка","во дворе бесплатно")}${f("checkin_from","Заезд с","14:00")}${f("checkout_until","Выезд до","12:00")}</div>
+  <div class="grid">${f("code","🔒 Код двери / ящика")}${f("key_info","🔒 Где ключ","ящик справа от двери")}${f("wifi_name","🔒 Wi-Fi сеть")}${f("wifi_pass","🔒 Wi-Fi пароль")}</div>
+  <details><summary class="note" style="cursor:pointer">🔒 Заметки для гостя по языкам (как пройти, бойлер, мусор…)</summary><div style="display:flex;flex-direction:column;gap:8px;margin-top:8px">${Object.entries(GL).map(([k,n])=>`<label class="f">${n}<textarea rows="3" data-an="${k}">${esc(N[k]||"")}</textarea></label>`).join("")}</div><p class="note">Если заметка есть только на одном языке — гость увидит её на английском или русском. Напиши на русском — я переведу на остальные.</p></details>
+  <div class="bar"><button class="go" type="submit">Сохранить</button></div></form>`;
+}
+function guestSetForm(){
+  const v=cache.gset;if(!v)return `<div class="note">Загружаю…</div>`;const R=v.rules||{};
+  return `<form class="sheet" id="gsf"><b>Общие настройки для гостей</b><div class="grid">
+  <label class="f">Название (в согласии на данные)<input id="gs-co" value="${esc(v.company)}"></label>
+  <label class="f">Телефон для гостей (WhatsApp/Viber)<input id="gs-ph" value="${esc(v.contact_phone)}" placeholder="+373 …"></label>
+  <label class="f">Заезд с<input id="gs-in" value="${esc(v.checkin_from)}"></label><label class="f">Выезд до<input id="gs-out" value="${esc(v.checkout_until)}"></label></div>
+  <details><summary class="note" style="cursor:pointer">Правила проживания по языкам</summary><div style="display:flex;flex-direction:column;gap:8px;margin-top:8px">${Object.entries(GL).map(([k,n])=>`<label class="f">${n}<textarea rows="3" data-gr="${k}">${esc(R[k]||"")}</textarea></label>`).join("")}</div></details>
+  <div class="bar"><button class="go" type="submit">Сохранить</button></div></form>`;
+}
+async function guestShare(id,lang,how){
+  const g=cache.guests.find(x=>x.id===id), txt=guestMsg(g,lang), ph=String(g.guest?.phone||g.guest_phone||"").replace(/\D/g,"");
+  if(how==="copy"){try{await navigator.clipboard.writeText(txt);toast("Скопировано — вставь гостю")}catch(_){const r=document.createRange();r.selectNodeContents(document.getElementById("gm"+id));getSelection().removeAllRanges();getSelection().addRange(r);toast("Текст выделен — скопируй")}}
+  else{const url=how==="wa"?`https://wa.me/${ph}?text=${encodeURIComponent(txt)}`:`viber://forward?text=${encodeURIComponent(txt)}`;if(TG?.openLink)TG.openLink(url);else window.open(url,"_blank")}
+  await call("guest_sent",{booking_id:id,lang});if(g.guest_status==="none")g.guest_status="sent";g.guest_lang=lang;g.guest_sent_at=new Date().toISOString();
+}
+
 function render(){
   document.getElementById("tabs").innerHTML=tabs();
-  document.getElementById("view").innerHTML=ui.tab==="cal"?viewCal():ui.tab==="sal"?viewSal():ui.tab==="pay"?viewPay():ui.tab==="rep"?viewRep():ui.tab==="team"?viewTeam():ui.tab==="money"?viewMoney():viewDay();
+  document.getElementById("view").innerHTML=ui.tab==="cal"?viewCal():ui.tab==="sal"?viewSal():ui.tab==="pay"?viewPay():ui.tab==="rep"?viewRep():ui.tab==="team"?viewTeam():ui.tab==="money"?viewMoney():ui.tab==="guests"?viewGuests():viewDay();
 }
 
 async function compress(file){
@@ -365,6 +442,17 @@ document.addEventListener("click",async e=>{
       await call("assign",{cleaning_id:+d.bee,cleaner_ids:[...ids]});toast(ids.has(sid)?"Назначено — пчёлка получила задание":"Пчёлка снята");await load();return}
     else if(d.act==="general"){ui.sheet=ui.sheet==="general"?null:"general"}
     else if(d.gdel){await call("general_delete",{cleaning_id:+d.gdel});toast("Генеральная удалена");await load();return}
+    else if(d.gw){ui.gfrom=shiftDate(ui.gfrom,+d.gw);ui.sheet=ui.sheet==="ainfo"||ui.sheet==="gset"?ui.sheet:null;await load();return}
+    else if(d.act==="ainfo"||d.act==="gset"){ui.sheet=ui.sheet===d.act?null:d.act;await load();return}
+    else if(d.gsend){const id=+d.gsend,g=cache.guests.find(x=>x.id===id);if(!g.guest_token){const r=await call("guest_link",{booking_id:id});g.guest_token=r.token}ui.sheet=ui.sheet==="gs"+id?null:"gs"+id}
+    else if(d.gcopy){await guestShare(+d.gcopy,d.l,"copy")}
+    else if(d.gwa){await guestShare(+d.gwa,d.l,"wa")}
+    else if(d.gvb){await guestShare(+d.gvb,d.l,"vb")}
+    else if(d.gdocs){const id=+d.gdocs;ui.open=ui.open==="gd"+id?null:"gd"+id;render();if(ui.open){cache.gdocs=cache.gdocs||{};cache.gdocs[id]=await call("guest_docs",{booking_id:id})}}
+    else if(d.gchk){await call("guest_check",{booking_id:+d.gchk,ok:true});toast("Отмечено: данные проверены");await load();return}
+    else if(d.gunchk){await call("guest_check",{booking_id:+d.gunchk,ok:false});await load();return}
+    else if(d.gxdel){ui.sheet="gx"+d.gxdel}
+    else if(d.gdodel){await call("guest_docs_delete",{booking_id:+d.gdodel});ui.sheet=null;ui.open=null;toast("Фото документа удалены");await load();return}
     else if(d.copylink){const l=`https://t.me/${BOT}?start=${d.copylink}`;try{await navigator.clipboard.writeText(l);toast("Ссылка скопирована — отправь сотруднику")}catch(_){TG?.openTelegramLink?.(`https://t.me/share/url?url=${encodeURIComponent(l)}`)}return}
     else return;
     render();
@@ -373,6 +461,8 @@ document.addEventListener("click",async e=>{
 document.addEventListener("change",async e=>{
   const t=e.target;
   try{
+    if(t.dataset.glang){ui.glang=ui.glang||{};ui.glang[+t.dataset.glang]=t.value;render();return}
+    if(t.dataset.aisel){ui.aid=+t.value;render();return}
     if(t.dataset.payeach){await call("set_pay_each",{cleaning_id:+t.dataset.payeach,value:t.checked});toast(t.checked?"Каждой — полная ставка":"Ставка делится поровну");return}
     if(t.dataset.srate){await call("staff_rate",{id:+t.dataset.srate,rate_lei:t.value===""?null:+t.value});toast("Ставка сохранена");await load();return}
     if(t.dataset.grate){await call("apt_grate",{id:+t.dataset.grate,rate_lei:t.value===""?null:+t.value});toast("Ставка генеральной сохранена");await load();return}
@@ -390,6 +480,10 @@ document.addEventListener("submit",async e=>{
   e.preventDefault();const f=e.target,v=id=>document.getElementById(id)?.value;
   try{
     if(f.id==="exf"){const r=await call("booking_create",{apartment_id:+v("ex-a"),source:v("ex-src"),checkin:v("ex-ci"),checkout:v("ex-co"),checkin_time:v("ex-t")||null,guests:+v("ex-g")||null,price_total:v("ex-p")?+v("ex-p"):null,transfer_eur:v("ex-tr")?+v("ex-tr"):null,name:v("ex-n")||null,phone:v("ex-ph")||null});ui.sheet=null;toast("Бронь сохранена");await load();if(r.note)setTimeout(()=>toast(r.note),2400);return}
+    if(f.id==="aif"){const info={notes:{}};f.querySelectorAll("[data-ai]").forEach(i=>info[i.dataset.ai]=i.value);f.querySelectorAll("[data-an]").forEach(i=>info.notes[i.dataset.an]=i.value);
+      const id=ui.aid||cache.ainfo[0].id;cache.ainfo=await call("apt_info",{id,info});ui.aid=id;toast("Инструкция сохранена");render();return}
+    if(f.id==="gsf"){const rules={};f.querySelectorAll("[data-gr]").forEach(i=>rules[i.dataset.gr]=i.value);
+      cache.gset=await call("guest_settings",{value:{company:v("gs-co"),contact_phone:v("gs-ph"),checkin_from:v("gs-in"),checkout_until:v("gs-out"),rules}});toast("Настройки сохранены");render();return}
     if(f.id==="genf"){const ids=[...document.querySelectorAll(".g-bee:checked")].map(x=>+x.value);await call("general_create",{apartment_id:+v("g-a"),date:v("g-d"),note:v("g-n")||null,cleaner_ids:ids});ui.sheet=null;ui.date=v("g-d");toast("Генеральная уборка создана");await load();return}
     if(f.dataset.payf){await call("pay",{booking_id:+f.dataset.payf,amount:+v("pa"),currency:v("pc"),method:ui.payM});ui.sheet=null;toast("Оплата записана");await load();return}
     if(f.id==="invf"){const r=await call("invite",{name:v("iv-n"),role:v("iv-r"),rate_lei:v("iv-rate")?+v("iv-rate"):null});const l=`https://t.me/${BOT}?start=${r.invite_code}`;cache.staff=await call("staff");render();try{await navigator.clipboard.writeText(l);toast("Приглашение создано, ссылка скопирована")}catch(_){toast("Приглашение создано — ссылка в таблице")}return}
