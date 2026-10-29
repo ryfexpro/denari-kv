@@ -44,9 +44,10 @@ button.sm{padding:5px 9px;font-size:13px}
 .leg{background:var(--panel2);border-radius:10px;padding:8px 10px;min-width:0}.leg .l{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--dim);font-weight:600}.leg .v{font-weight:600}.leg .m{color:var(--mute);font-size:13px}
 select,input,textarea{font:inherit;font-size:15px;background:var(--panel2);color:var(--fg);border:1px solid var(--line);border-radius:9px;padding:8px 10px;min-width:0;width:100%}
 label.f{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--mute);flex:1 1 140px}.sheet>label.f,form.sheet>label.f{flex:none}
-.photos{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.photos{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}@media(max-width:440px){.photos{grid-template-columns:repeat(3,1fr)}}
 .ph{aspect-ratio:1;border-radius:9px;border:1px dashed var(--line);background:var(--panel2);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:11.5px;color:var(--mute);text-align:center;position:relative;overflow:hidden;padding:4px}
 .ph.done{border-style:solid;border-color:var(--good)}.ph img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}.ph input{position:absolute;inset:0;opacity:0}
+.cap{position:absolute;left:0;right:0;bottom:0;background:rgba(0,0,0,.6);color:#fff;font-size:10.5px;padding:2px 4px;text-align:center;z-index:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ph .ic{font-size:20px;line-height:1}.ph.busy::after{content:"…";position:absolute;inset:0;display:grid;place-items:center;background:rgba(0,0,0,.55);color:#fff;font-size:22px}
 .gal{display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:6px}.gal a{display:block;aspect-ratio:1;border-radius:9px;overflow:hidden;background:var(--panel2)}.gal img{width:100%;height:100%;object-fit:cover}
 .note{font-size:13px;color:var(--mute)}
@@ -84,7 +85,8 @@ const API="https://zsrddmgiefmuwvcobkin.supabase.co/functions/v1/kv-api";
 const PAY_ACTIONS=new Set(["payroll","payout_mark","staff_rate","apt_rates","apt_rate","apt_grate","calendar"]);
 const BOT="apartmanager_bot";
 const TG=window.Telegram?.WebApp; TG?.ready(); TG?.expand?.();
-const SLOTS=[["bath","Ванная"],["kitchen","Кухня"],["beds","Кровати"],["key","Ключ в ящике"]];
+let SLOTS=[["rooms","Комнаты"],["kitchen","Кухня"],["bath","Туалет и ванная"],["wardrobe","Шкафы"],["fridge","Холодильник"],["microwave","Микроволновка"],["linen","Шкаф с доп. бельём"],["key","Ключи в локбоксе"]];
+const slotName=k=>(SLOTS.find(x=>x[0]===k)||[k,{bath:"Ванная",beds:"Кровати",repair:"Ремонт"}[k]||k])[1];
 const SS={wait:["Ждёт уборки","var(--mute)"],progress:["Убирает","var(--accent)"],review:["На проверке","var(--violet)"],remark:["Замечание","var(--amber)"],ok:["Принято","var(--good)"]};
 const METH=[["cash","MDL","Нал лей"],["cash","EUR","Нал €"],["card","MDL","Карта"],["revolut","EUR","Revolut"]];
 let me=null, ui={tab:"day",date:today(),sheet:null,open:null}, cache={day:[],staff:[],apts:[],repairs:[],gal:{},up:{}};
@@ -115,6 +117,7 @@ async function boot(){
     if(e.payload?.error==="not_registered"){v.innerHTML=`<div class="empty">Вы ещё не в команде.<br>Попросите админа прислать ссылку-приглашение.<br><br><span class="note">Ваш Telegram ID: ${e.payload.tg_id}</span></div>`;return}
     v.innerHTML=`<div class="empty">${esc(e.message)}</div>`;return;
   }
+  if(Array.isArray(me.slots)&&me.slots.length) SLOTS=me.slots.map(x=>[x.k,x.n]);
   document.getElementById("who").textContent=me.name+" · "+({owner:"владелец",admin:"админ",dispatcher:"помощник",cleaner:"пчёлка",master:"мастер",manager:"менеджер"}[me.role]||me.role);
   ui.tab=me.role==="master"?"rep":"day";
   if(canDispatch()){[cache.staff,cache.apts]=await Promise.all([call("staff"),call("apartments")])} else {cache.apts=await call("apartments").catch(()=>[])}
@@ -124,7 +127,7 @@ async function load(){
   try{
     if(ui.tab==="day"||ui.tab==="pay") cache.day=await call("day",{date:ui.date});
     if(me.role==="cleaner"&&ui.tab==="day") for(const x of cache.day) for(const c of [x.cleaning,x.general]){
-      if(c&&c.status==="progress"&&c.photos>0&&!cache.up[c.id]){const g=await call("photos",{cleaning_id:c.id});cache.up[c.id]={};for(const p of g) if(!cache.up[c.id][p.slot]) cache.up[c.id][p.slot]=p.url}}
+      if(c&&c.status==="progress"&&c.photos>0&&!cache.up[c.id]){const g=await call("photos",{cleaning_id:c.id});cache.up[c.id]={};for(const p of g){const u=cache.up[c.id][p.slot];if(u)u.n++;else cache.up[c.id][p.slot]={url:p.url,n:1}}}}
     if(ui.tab==="rep") cache.repairs=await call("repairs");
     if(ui.tab==="cal"){if(!ui.cal)ui.cal=today(-2);cache.cal=await call("calendar",{from:ui.cal,to:shiftDate(ui.cal,13)})}
     if(ui.tab==="team") cache.staff=await call("staff");
@@ -194,7 +197,8 @@ function viewDay(){
   ${stay.length?`<div class="card"><div class="h"><span class="apt">Продолжают проживать</span>${chip(stay.length+" кв.","var(--mute)")}</div><div class="note">${stay.map(s=>`${esc(s.apt)} — до ${dm(s.stay_until)}`).join(" · ")}</div></div>`:""}`;
 }
 function gallery(id){const g=cache.gal[id];if(!g)return `<div class="note">Загружаю фото…</div>`;if(!g.length)return `<div class="note">Фото пока нет.</div>`;
-  return `<div class="gal">${g.map(p=>`<a href="${p.url}" target="_blank" rel="noopener"><img src="${p.url}" alt="${esc(p.slot)}" loading="lazy"></a>`).join("")}</div>`}
+  const ord=k=>{const i=SLOTS.findIndex(x=>x[0]===k);return i<0?99:i};
+  return `<div class="gal">${[...g].sort((a,b)=>ord(a.slot)-ord(b.slot)).map(p=>`<a href="${p.url}" target="_blank" rel="noopener" style="position:relative"><img src="${p.url}" alt="${esc(slotName(p.slot))}" loading="lazy"><span class="cap">${esc(slotName(p.slot))}</span></a>`).join("")}</div>`}
 function extraForm(){const d=ui.date;return `<form class="sheet" id="exf"><b>Новая бронь</b><div class="grid">
   <label class="f">Квартира<select id="ex-a">${cache.apts.map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join("")}</select></label>
   <label class="f">Откуда<select id="ex-src"><option value="extra">Экстра (не Booking)</option><option value="booking">Booking (вручную)</option></select></label>
@@ -216,15 +220,19 @@ function viewCleaner(rows){
   const jobs=rows.flatMap(x=>[x.cleaning&&{x,c:x.cleaning},x.general&&{x,c:x.general}].filter(Boolean));
   return `${dateNav()}<h1>Мои уборки</h1>
   ${!jobs.length?`<div class="empty">На ${ru(ui.date)} уборок нет.</div>`:""}
-  ${jobs.map(({x,c})=>{const [sn,sc]=SS[c.status],up=cache.up[c.id]||{};const others=(c.cleaners||[]).filter(p=>p.id!==me.id).map(p=>p.name);const ready=Object.values(up).filter(v=>v!=="busy").length;return `<div class="card" style="--sc:${sc}">
+  ${jobs.map(({x,c})=>{const [sn,sc]=SS[c.status],up=cache.up[c.id]||{};const others=(c.cleaners||[]).filter(p=>p.id!==me.id).map(p=>p.name);const ready=SLOTS.filter(([k])=>up[k]?.n).length,need=SLOTS.length,keyS=SLOTS.find(x=>x[0]==="key"),main=SLOTS.filter(x=>x[0]!=="key"),mainOk=main.every(([k])=>up[k]?.n);
+    const ph=(k,n,off)=>{const u=up[k];return `<label class="ph ${u?.n?"done":""} ${u?.busy?"busy":""}" style="${off?"opacity:.4;pointer-events:none":""}">${u?.url?`<img alt="${n}" src="${u.url}"><span class="cap">${n}${u.n>1?" · "+u.n:""}</span>`:`<span class="ic">${k==="key"?"🔑":"+"}</span>${n}`}<input type="file" accept="image/*" capture="environment" data-ph="${c.id}" data-slot="${k}" ${off?"disabled":""}></label>`};return `<div class="card" style="--sc:${sc}">
     <div class="h"><span class="apt">${esc(x.apt)}</span>${chip(sn,sc)}</div>
     ${c.kind==="general"?`<div class="leg"><div class="l">🧽 Генеральная уборка</div><div class="v">${esc(c.note||"Полная уборка квартиры")}</div></div>`
       :`<div class="flow"><div class="leg"><div class="l">Гость выезжает</div><div class="v">${x.out?.time||"до 12:00"}</div></div><div class="leg"><div class="l">Подготовить</div><div class="v">на ${c.prep??"?"} чел.${c.due?" к "+esc(c.due):""}</div></div></div>`}
     ${others.length?`<div class="note">Вместе с: ${others.map(esc).join(", ")}</div>`:""}
     ${c.status==="remark"?`<div class="remark">Админ: ${esc(c.remark)}. Исправь и сфотографируй заново.</div>`:""}
     ${c.status==="ok"?`<div class="note">Уборка принята 👍</div>`:c.status==="review"?`<div class="note">Отправлено на проверку.</div>`:`
-    <div class="photos">${SLOTS.map(([k,n])=>`<label class="ph ${up[k]?"done":""} ${up[k]==="busy"?"busy":""}">${up[k]&&up[k]!=="busy"?`<img alt="${n}" src="${up[k]}">`:`<span class="ic">+</span>${n}`}<input type="file" accept="image/*" capture="environment" data-ph="${c.id}" data-slot="${k}"></label>`).join("")}</div>
-    <div class="bar"><button class="go" data-done="${c.id}" ${ready<4?"disabled":""}>Готово (${ready}/4)</button><button class="warn" data-prob="${x.apartment_id}">Проблема</button></div>`}
+    <div class="note">1. Сфотографируй квартиру по пунктам. В пункт можно добавить несколько фото — нажми ещё раз (например, каждую комнату).</div>
+    <div class="photos">${main.map(([k,n])=>ph(k,n,false)).join("")}</div>
+    ${keyS?`<div class="note" style="${mainOk?"":"opacity:.55"}">2. Последний шаг — закрой квартиру и сфотографируй ${esc(keyS[1].toLowerCase())}${mainOk?"":" (откроется, когда будут все фото квартиры)"}.</div>
+    <div class="photos">${ph(keyS[0],keyS[1],!mainOk)}</div>`:""}
+    <div class="bar"><button class="go" data-done="${c.id}" ${ready<need?"disabled":""}>Квартира готова (${ready}/${need})</button><button class="warn" data-prob="${x.apartment_id}">Проблема</button></div>`}
     ${ui.sheet==="prob"+x.apartment_id?probForm(x.apartment_id):""}
   </div>`}).join("")}`;
 }
@@ -469,10 +477,10 @@ document.addEventListener("change",async e=>{
     if(t.dataset.arate){await call("apt_rate",{id:+t.dataset.arate,rate_lei:t.value===""?null:+t.value});toast("Ставка квартиры сохранена");await load();return}
     if(t.dataset.assign){if(!t.value)return;await call("assign",{cleaning_id:+t.dataset.assign,cleaner_id:+t.value});toast("Назначено — пчёлка получила сообщение");await load()}
     else if(t.dataset.ph){
-      const f=t.files[0];if(!f)return;const id=+t.dataset.ph,slot=t.dataset.slot;cache.up[id]=cache.up[id]||{};cache.up[id][slot]="busy";render();
+      const f=t.files[0];if(!f)return;const id=+t.dataset.ph,slot=t.dataset.slot;cache.up[id]=cache.up[id]||{};const prev=cache.up[id][slot];cache.up[id][slot]={...(prev||{n:0}),busy:true};render();
       const blob=await compress(f);const u=await call("photo_upload_url",{cleaning_id:id,slot});
-      if(!await upload(u.url,blob)){delete cache.up[id][slot];render();toast("Фото не загрузилось — проверь интернет и попробуй снова",1);return}
-      await call("photo_add",{cleaning_id:id,slot,path:u.path});cache.up[id][slot]=URL.createObjectURL(blob);render();
+      if(!await upload(u.url,blob)){if(prev)cache.up[id][slot]=prev;else delete cache.up[id][slot];render();toast("Фото не загрузилось — проверь интернет и попробуй снова",1);return}
+      await call("photo_add",{cleaning_id:id,slot,path:u.path});cache.up[id][slot]={url:URL.createObjectURL(blob),n:(prev?.n||0)+1};render();
     }
   }catch(err){toast(err.message,1)}
 });
