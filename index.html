@@ -70,6 +70,7 @@ table{width:100%;border-collapse:collapse;font-size:14px}th,td{text-align:left;p
 <div class="toast" id="toast"></div>
 <script>
 const API="https://zsrddmgiefmuwvcobkin.supabase.co/functions/v1/kv-api";
+const PAY_ACTIONS=new Set(["payroll","payout_mark","staff_rate","apt_rates","apt_rate"]);
 const BOT="apartmanager_bot";
 const TG=window.Telegram?.WebApp; TG?.ready(); TG?.expand?.();
 const SLOTS=[["bath","Ванная"],["kitchen","Кухня"],["beds","Кровати"],["key","Ключ в ящике"]];
@@ -84,7 +85,7 @@ const ru=s=>{const d=new Date(s+"T12:00:00");return d.toLocaleDateString("ru-RU"
 const dm=s=>s?s.slice(8,10)+"."+s.slice(5,7):"";
 function toast(m,err){const t=document.getElementById("toast");t.textContent=m;t.className="toast on"+(err?" err":"");clearTimeout(toast.h);toast.h=setTimeout(()=>t.className="toast",err?3500:2200);try{TG?.HapticFeedback?.notificationOccurred(err?"error":"success")}catch(e){}}
 async function call(action,body={}){
-  const r=await fetch(API,{method:"POST",headers:{"content-type":"application/json","x-tg-init":TG?.initData||""},body:JSON.stringify({action,...body})});
+  const r=await fetch(PAY_ACTIONS.has(action)?API.replace("kv-api","kv-pay"):API,{method:"POST",headers:{"content-type":"application/json","x-tg-init":TG?.initData||""},body:JSON.stringify({action,...body})});
   const j=await r.json().catch(()=>({error:"Нет связи с сервером"}));
   if(!r.ok||j.error){const e=new Error(j.error||"Ошибка");e.payload=j;e.status=r.status;throw e}
   return j.data??j;
@@ -115,13 +116,14 @@ async function load(){
       if(c&&c.status==="progress"&&c.photos>0&&!cache.up[c.id]){const g=await call("photos",{cleaning_id:c.id});cache.up[c.id]={};for(const p of g) if(!cache.up[c.id][p.slot]) cache.up[c.id][p.slot]=p.url}}
     if(ui.tab==="rep") cache.repairs=await call("repairs");
     if(ui.tab==="team") cache.staff=await call("staff");
+    if(ui.tab==="sal"){if(!ui.wk)ui.wk=weekOf(today(-7));cache.pay=await call("payroll",{from:ui.wk[0],to:ui.wk[1]});if(ui.sheet==="rates")cache.rates=await call("apt_rates")}
     if(ui.tab==="money") cache.money=await call("money",{from:ui.date.slice(0,8)+"01",to:ui.date});
   }catch(e){toast(e.message,1)}
   render();
 }
 function tabs(){
   const t=me.role==="cleaner"?[["day","Мои уборки"],["rep","Ремонт"]]:me.role==="master"?[["rep","Ремонт"]]:me.role==="dispatcher"?[["day","График"],["rep","Ремонт"]]:
-    [["day","График"],["pay","Оплаты"],["rep","Ремонт"],["team","Команда"]].concat(me.role==="owner"?[["money","Деньги"]]:[]);
+    [["day","График"],["pay","Оплаты"],["sal","Зарплаты"],["rep","Ремонт"],["team","Команда"]].concat(me.role==="owner"?[["money","Деньги"]]:[]);
   return t.map(([k,n])=>`<button class="${ui.tab===k?"on":""}" data-tab="${k}">${n}</button>`).join("");
 }
 function dateNav(){return `<div class="dnav"><button class="sm" data-d="-1">‹</button><b>${ru(ui.date)}${ui.date===today()?" · сегодня":ui.date===today(1)?" · завтра":""}</b><button class="sm" data-d="1">›</button></div>`}
@@ -233,9 +235,29 @@ function viewMoney(){
   ${m.length?`<table><thead><tr><th>Способ</th><th>Валюта</th><th style="text-align:right">Сумма</th><th style="text-align:right">Оплат</th></tr></thead><tbody>${m.map(r=>`<tr><td>${meth[r.method]||r.method}</td><td>${r.currency}</td><td class="n">${Number(r.total).toLocaleString("ru-RU")}</td><td class="n">${r.n}</td></tr>`).join("")}</tbody></table>`:`<div class="empty">Оплат пока нет.</div>`}`;
 }
 
+function weekOf(dstr){const d=new Date(dstr+"T12:00:00");const dow=(d.getDay()+6)%7;const m=new Date(d);m.setDate(d.getDate()-dow);const su=new Date(m);su.setDate(m.getDate()+6);return [m.toLocaleDateString("sv-SE"),su.toLocaleDateString("sv-SE")]}
+function viewSal(){
+  const [f,t]=ui.wk, rows=cache.pay||[], act=rows.filter(r=>r.count>0), total=act.reduce((s,r)=>s+Number(r.amount),0), unpaid=act.filter(r=>!r.paid).reduce((s,r)=>s+Number(r.amount),0);
+  const mark={ok:"✓",review:"на проверке"};
+  return `<div class="dnav"><button class="sm" data-wk="-7">‹</button><b>${dm(f)} – ${dm(t)}</b><button class="sm" data-wk="7">›</button></div>
+  <div class="stats"><div class="st"><b>${act.reduce((s,r)=>s+r.count,0)}</b><span>уборок за неделю</span></div><div class="st"><b>${act.length}</b><span>пчёлок работали</span></div><div class="st"><b>${total}</b><span>лей всего</span></div><div class="st"><b style="color:${unpaid?"var(--amber)":"var(--good)"}">${unpaid}</b><span>лей не выплачено</span></div></div>
+  <p class="note">Считаются уборки, которые пчёлка завершила (с фото): «на проверке» и «принято». Отчёт приходит тебе и Ире в Telegram каждую пятницу в 09:00 за прошлую неделю.</p>
+  ${!act.length?`<div class="empty">За эту неделю завершённых уборок нет.</div>`:""}
+  ${act.map(r=>`<div class="card" style="--sc:${r.paid?"var(--good)":"var(--amber)"}">
+    <div class="h"><span class="apt">🐝 ${esc(r.name)}</span><span style="font-family:var(--mono);font-size:17px">${r.amount} лей</span></div>
+    <div class="note">${r.count} уборок · ${r.days} ${r.days===1?"день":r.days<5?"дня":"дней"}${r.remarks?` · замечаний: ${r.remarks}`:""}${r.no_rate?` · <span style="color:var(--amber)">не задана ставка — посчитано 0</span>`:""}</div>
+    <details><summary class="note" style="cursor:pointer">Кто, где, когда</summary><table><tbody>${r.items.map(i=>`<tr><td>${dm(i.date)}</td><td>${esc(i.apt)}</td><td class="n">${i.rate??0} лей</td><td>${mark[i.status]||i.status}</td></tr>`).join("")}</tbody></table></details>
+    <div class="bar">${r.paid?`${chip("Выплачено "+new Date(r.paid.at).toLocaleDateString("ru-RU"),"var(--good)")} <button class="sm" data-unpay="${r.staff_id}">Отменить</button>`:`<button class="go sm" data-payout="${r.staff_id}">Выплачено ${r.amount} лей</button>`}</div>
+  </div>`).join("")}
+  <div class="card"><div class="h"><span class="apt">Ставки за уборку</span><button class="sm" data-act="rates">${ui.sheet==="rates"?"Скрыть":"Настроить"}</button></div>
+  ${ui.sheet==="rates"?`<p class="note">Ставка пчёлки — по умолчанию. Если у квартиры своя ставка (большая квартира), она важнее.</p>
+    <table><tbody>${(cache.pay||[]).map(p=>`<tr><td>🐝 ${esc(p.name)}</td><td><input type="number" min="0" style="width:110px" value="${p.rate??""}" data-srate="${p.staff_id}" placeholder="лей"></td></tr>`).join("")}</tbody></table>
+    <table><tbody>${(cache.rates||[]).map(a=>`<tr><td>${esc(a.name)}</td><td><input type="number" min="0" style="width:110px" value="${a.clean_rate_lei??""}" data-arate="${a.id}" placeholder="как у пчёлки"></td></tr>`).join("")}</tbody></table>`:""}</div>`;
+}
+
 function render(){
   document.getElementById("tabs").innerHTML=tabs();
-  document.getElementById("view").innerHTML=ui.tab==="pay"?viewPay():ui.tab==="rep"?viewRep():ui.tab==="team"?viewTeam():ui.tab==="money"?viewMoney():viewDay();
+  document.getElementById("view").innerHTML=ui.tab==="sal"?viewSal():ui.tab==="pay"?viewPay():ui.tab==="rep"?viewRep():ui.tab==="team"?viewTeam():ui.tab==="money"?viewMoney():viewDay();
 }
 
 async function compress(file){
@@ -275,6 +297,10 @@ document.addEventListener("click",async e=>{
     else if(d.dooff){const r=await call("staff_set_active",{id:+d.dooff,active:false});ui.sheet=null;cache.staff=await call("staff");toast(r.freed?`Отключён. Освободилось уборок: ${r.freed} — назначь другую пчёлку`:"Сотрудник отключён")}
     else if(d.on){await call("staff_set_active",{id:+d.on,active:true});cache.staff=await call("staff");toast("Доступ возвращён")}
     else if(d.relink){const r=await call("staff_relink",{id:+d.relink});cache.staff=await call("staff");const l=`https://t.me/${BOT}?start=${r.invite_code}`;try{await navigator.clipboard.writeText(l);toast("Старый вход отключён, новая ссылка скопирована")}catch(_){toast("Новая ссылка — в таблице")}}
+    else if(d.wk){ui.wk=weekOf(shiftDate(ui.wk[0],+d.wk));await load();return}
+    else if(d.act==="rates"){ui.sheet=ui.sheet==="rates"?null:"rates";await load();return}
+    else if(d.payout){await call("payout_mark",{staff_id:+d.payout,from:ui.wk[0],to:ui.wk[1]});toast("Отмечено: выплачено");await load();return}
+    else if(d.unpay){await call("payout_mark",{staff_id:+d.unpay,from:ui.wk[0],to:ui.wk[1],undo:true});await load();return}
     else if(d.copylink){const l=`https://t.me/${BOT}?start=${d.copylink}`;try{await navigator.clipboard.writeText(l);toast("Ссылка скопирована — отправь сотруднику")}catch(_){TG?.openTelegramLink?.(`https://t.me/share/url?url=${encodeURIComponent(l)}`)}return}
     else return;
     render();
@@ -283,6 +309,8 @@ document.addEventListener("click",async e=>{
 document.addEventListener("change",async e=>{
   const t=e.target;
   try{
+    if(t.dataset.srate){await call("staff_rate",{id:+t.dataset.srate,rate_lei:t.value===""?null:+t.value});toast("Ставка сохранена");await load();return}
+    if(t.dataset.arate){await call("apt_rate",{id:+t.dataset.arate,rate_lei:t.value===""?null:+t.value});toast("Ставка квартиры сохранена");await load();return}
     if(t.dataset.assign){if(!t.value)return;await call("assign",{cleaning_id:+t.dataset.assign,cleaner_id:+t.value});toast("Назначено — пчёлка получила сообщение");await load()}
     else if(t.dataset.ph){
       const f=t.files[0];if(!f)return;const id=+t.dataset.ph,slot=t.dataset.slot;cache.up[id]=cache.up[id]||{};cache.up[id][slot]="busy";render();
