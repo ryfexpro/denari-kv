@@ -81,7 +81,7 @@ table{width:100%;border-collapse:collapse;font-size:14px}th,td{text-align:left;p
 <div class="toast" id="toast"></div>
 <script>
 const API="https://zsrddmgiefmuwvcobkin.supabase.co/functions/v1/kv-api";
-const PAY_ACTIONS=new Set(["payroll","payout_mark","staff_rate","apt_rates","apt_rate","calendar"]);
+const PAY_ACTIONS=new Set(["payroll","payout_mark","staff_rate","apt_rates","apt_rate","apt_grate","calendar"]);
 const BOT="apartmanager_bot";
 const TG=window.Telegram?.WebApp; TG?.ready(); TG?.expand?.();
 const SLOTS=[["bath","Ванная"],["kitchen","Кухня"],["beds","Кровати"],["key","Ключ в ящике"]];
@@ -123,7 +123,7 @@ async function boot(){
 async function load(){
   try{
     if(ui.tab==="day"||ui.tab==="pay") cache.day=await call("day",{date:ui.date});
-    if(me.role==="cleaner"&&ui.tab==="day") for(const x of cache.day){const c=x.cleaning;
+    if(me.role==="cleaner"&&ui.tab==="day") for(const x of cache.day) for(const c of [x.cleaning,x.general]){
       if(c&&c.status==="progress"&&c.photos>0&&!cache.up[c.id]){const g=await call("photos",{cleaning_id:c.id});cache.up[c.id]={};for(const p of g) if(!cache.up[c.id][p.slot]) cache.up[c.id][p.slot]=p.url}}
     if(ui.tab==="rep") cache.repairs=await call("repairs");
     if(ui.tab==="cal"){if(!ui.cal)ui.cal=today(-2);cache.cal=await call("calendar",{from:ui.cal,to:shiftDate(ui.cal,13)})}
@@ -149,25 +149,43 @@ function legs(x){
 }
 const payLabel=i=>i.pay_status==="ota_paid"?"оплачено Booking":i.paid?.length?"оплачено":"оплата на месте";
 
+function beeChips(c){
+  const cleaners=cache.staff.filter(s=>s.role==="cleaner"&&s.active), on=new Set((c.cleaners||[]).map(p=>p.id));
+  return `<div class="bar" style="gap:6px">🐝 ${cleaners.length?cleaners.map(s=>`<button class="sm ${on.has(s.id)?"go":""}" data-bee="${c.id}" data-sid="${s.id}">${esc(s.name)}</button>`).join(""):`<span class="note">Добавь пчёлок во вкладке «Команда»</span>`}</div>
+  ${on.size>1&&isAdmin()?`<label class="note" style="display:flex;gap:8px;align-items:center"><input type="checkbox" style="width:auto" data-payeach="${c.id}" ${c.pay_each?"checked":""}> каждой полная ставка (иначе делится поровну)</label>`:""}`;
+}
+function cleanBlock(c){
+  const [sn,sc]=SS[c.status];
+  return `${c.kind==="general"?`<div class="h"><b>🧽 Генеральная уборка</b>${chip(sn,sc)}</div>${c.note?`<div class="note">${esc(c.note)}</div>`:""}`:""}
+    ${c.status==="remark"&&c.remark?`<div class="remark">Замечание: ${esc(c.remark)}</div>`:""}
+    ${beeChips(c)}
+    <div class="bar"><button class="sm" data-gal="${c.id}">Фото (${c.photos})</button>
+      ${c.status==="review"?`<button class="sm go" data-ok="${c.id}">Принять</button><button class="sm warn" data-rem="${c.id}">Замечание</button>`:""}
+      ${c.kind==="general"&&c.status==="wait"?`<button class="sm" data-gdel="${c.id}">Удалить</button>`:""}</div>
+    ${ui.open==="gal"+c.id?gallery(c.id):""}
+    ${ui.sheet==="rem"+c.id?`<div class="sheet"><textarea id="rt" rows="2" placeholder="Что исправить: например, сковородка слева грязная по краям"></textarea><div class="bar"><button class="go" data-dorem="${c.id}">Отправить пчёлкам</button><button data-act="close">Отмена</button></div></div>`:""}`;
+}
+function generalForm(){const cleaners=cache.staff.filter(s=>s.role==="cleaner"&&s.active);return `<form class="sheet" id="genf"><b>🧽 Генеральная уборка</b><div class="grid">
+  <label class="f">Квартира<select id="g-a">${cache.apts.map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join("")}</select></label>
+  <label class="f">Дата<input id="g-d" type="date" value="${ui.date}" required></label></div>
+  <label class="f">Что сделать<input id="g-n" placeholder="Например: окна, шторы, духовка, холодильник"></label>
+  <div class="note">Пчёлки:</div><div class="bar">${cleaners.map(s=>`<label class="note" style="display:flex;gap:6px;align-items:center"><input type="checkbox" style="width:auto" class="g-bee" value="${s.id}">${esc(s.name)}</label>`).join("")||"нет пчёлок"}</div>
+  <div class="bar"><button class="go" type="submit">Создать</button><button type="button" data-act="close">Отмена</button></div></form>`}
+
 function viewDay(){
-  const rows=cache.day, cl=rows.filter(x=>x.cleaning), stay=rows.filter(x=>!x.cleaning&&x.stay_until&&!x.in);
-  if(me.role==="cleaner") return viewCleaner(cl);
-  const n=s=>cl.filter(x=>x.cleaning.status===s).length;
-  const cleaners=cache.staff.filter(s=>s.role==="cleaner"&&s.active);
+  const rows=cache.day, all=rows.flatMap(x=>[x.cleaning,x.general].filter(Boolean)), stay=rows.filter(x=>!x.cleaning&&!x.general&&x.stay_until&&!x.in);
+  if(me.role==="cleaner") return viewCleaner(rows);
+  const n=s=>all.filter(c=>c.status===s).length;
   return `${dateNav()}
   <div class="stats"><div class="st"><b>${n("wait")+n("progress")}</b><span>уборок осталось</span></div><div class="st"><b style="color:var(--violet)">${n("review")}</b><span>ждут проверки</span></div><div class="st"><b style="color:var(--amber)">${n("remark")}</b><span>замечания</span></div><div class="st"><b style="color:var(--good)">${n("ok")}</b><span>принято</span></div></div>
-  <div class="bar">${isAdmin()?`<button class="go" data-act="extra">+ Бронь</button>`:""}<button data-act="viber">Текст для Viber</button></div>
-  ${ui.sheet==="extra"?extraForm():""}
+  <div class="bar">${isAdmin()?`<button class="go" data-act="extra">+ Бронь</button>`:""}<button data-act="general">+ Генеральная</button><button data-act="viber">Текст для Viber</button></div>
+  ${ui.sheet==="extra"?extraForm():""}${ui.sheet==="general"?generalForm():""}
   ${ui.sheet==="viber"?`<div class="sheet"><b>График на ${dm(ui.date)}</b><pre id="vtxt">${esc(viberText())}</pre><div class="bar"><button class="go" data-act="copy">Копировать</button><button data-act="close">Закрыть</button></div></div>`:""}
   ${!rows.length?`<div class="empty">На эту дату броней нет.<br><span class="note">Брони придут из Booking после подключения Beds24, или добавь вручную кнопкой «+ Бронь».</span></div>`:""}
-  ${rows.filter(x=>x.cleaning||x.in).map(x=>{const c=x.cleaning;const [sn,sc]=c?SS[c.status]:["Без уборки","var(--line)"];return `<div class="card" style="--sc:${sc}">
-    <div class="h"><span class="apt">${esc(x.apt)}</span>${c?chip(sn,sc):""}</div>${legs(x)}
-    ${c?.status==="remark"&&c.remark?`<div class="remark">Замечание: ${esc(c.remark)}</div>`:""}
-    ${c?`<div class="bar"><label class="f" style="flex:0 1 190px">🐝 Пчёлка<select data-assign="${c.id}"><option value="">— не назначена —</option>${cleaners.map(s=>`<option value="${s.id}" ${s.id===c.cleaner_id?"selected":""}>${esc(s.name)}</option>`).join("")}</select></label>
-      <button class="sm" data-gal="${c.id}" style="align-self:flex-end">Фото (${c.photos})</button>
-      ${c.status==="review"?`<button class="sm go" data-ok="${c.id}" style="align-self:flex-end">Принять</button><button class="sm warn" data-rem="${c.id}" style="align-self:flex-end">Замечание</button>`:""}</div>`:""}
-    ${ui.open==="gal"+c?.id?gallery(c.id):""}
-    ${ui.sheet==="rem"+c?.id?`<div class="sheet"><textarea id="rt" rows="2" placeholder="Что исправить: например, сковородка слева грязная по краям"></textarea><div class="bar"><button class="go" data-dorem="${c.id}">Отправить пчёлке</button><button data-act="close">Отмена</button></div></div>`:""}
+  ${rows.filter(x=>x.cleaning||x.in||x.general).map(x=>{const c=x.cleaning;const [sn,sc]=c?SS[c.status]:x.general?SS[x.general.status]:["","var(--line)"];return `<div class="card" style="--sc:${sc}">
+    <div class="h"><span class="apt">${esc(x.apt)}</span>${c?chip(sn,sc):""}</div>${(x.out||x.in||c)?legs(x):""}
+    ${c?cleanBlock(c):""}
+    ${x.general?`${c?'<hr style="border:0;border-top:1px dashed var(--line);width:100%;margin:0">':""}${cleanBlock(x.general)}`:""}
     ${x.in&&isAdmin()?`<div class="bar">${!x.in.no_show&&ui.date<=today()?`<button class="sm" data-noshow="${x.in.id}">Незаезд</button>`:x.in.no_show?`<button class="sm" data-unnoshow="${x.in.id}">Отменить незаезд</button>`:""}<button class="sm" data-move="${x.in.id}">Переселить</button></div>`:""}
     ${ui.sheet==="move"+x.in?.id?`<div class="sheet"><label class="f">Переселить в<select id="mv">${cache.apts.filter(a=>a.id!==x.apartment_id).map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join("")}</select></label><p class="note">Проверю, свободна ли квартира на все ночи. Уборки и график пересчитаются.</p><div class="bar"><button class="go" data-domove="${x.in.id}">Переселить</button><button data-act="close">Отмена</button></div></div>`:""}
   </div>`}).join("")}
@@ -187,20 +205,24 @@ function extraForm(){const d=ui.date;return `<form class="sheet" id="exf"><b>Н�
 function viberText(){
   const r=cache.day; let t=`📅 График на ${dm(ui.date)}\n\n`;
   for(const x of r.filter(x=>x.cleaning||x.in)) t+=`👉 ${x.apt}\nВыезд: ${x.out?(x.out.name||"")+(x.out.time?" в "+x.out.time:""):""}\nЗаезд: ${x.in?`${x.in.name||""} ${x.in.guests??""} взр на ${x.in.nights} ${x.in.nights>1?"ночи":"ночь"}${x.in.time?" в "+x.in.time:""}`:"Уборка на "+(x.cleaning?.prep??"")}${x.cleaning?.cleaner?`\nУбирает: ${x.cleaning.cleaner}`:""}\n\n`;
-  for(const x of r.filter(x=>!x.cleaning&&!x.in&&x.stay_until)) t+=`👉 ${x.apt}\nПродолжают проживать до ${dm(x.stay_until)}\n\n`;
+  for(const x of r.filter(x=>x.general)) t+=`🧽 ${x.apt}\nГенеральная уборка${x.general.note?": "+x.general.note:""}${x.general.cleaner?`\nУбирает: ${x.general.cleaner}`:""}\n\n`;
+  for(const x of r.filter(x=>!x.cleaning&&!x.in&&!x.general&&x.stay_until)) t+=`👉 ${x.apt}\nПродолжают проживать до ${dm(x.stay_until)}\n\n`;
   return t.trim();
 }
 
-function viewCleaner(cl){
+function viewCleaner(rows){
+  const jobs=rows.flatMap(x=>[x.cleaning&&{x,c:x.cleaning},x.general&&{x,c:x.general}].filter(Boolean));
   return `${dateNav()}<h1>Мои уборки</h1>
-  ${!cl.length?`<div class="empty">На ${ru(ui.date)} уборок нет.</div>`:""}
-  ${cl.map(x=>{const c=x.cleaning,[sn,sc]=SS[c.status],up=cache.up[c.id]||{};const cnt=Object.keys(up).length;return `<div class="card" style="--sc:${sc}">
+  ${!jobs.length?`<div class="empty">На ${ru(ui.date)} уборок нет.</div>`:""}
+  ${jobs.map(({x,c})=>{const [sn,sc]=SS[c.status],up=cache.up[c.id]||{};const others=(c.cleaners||[]).filter(p=>p.id!==me.id).map(p=>p.name);const ready=Object.values(up).filter(v=>v!=="busy").length;return `<div class="card" style="--sc:${sc}">
     <div class="h"><span class="apt">${esc(x.apt)}</span>${chip(sn,sc)}</div>
-    <div class="flow"><div class="leg"><div class="l">Гость выезжает</div><div class="v">${x.out?.time||"до 12:00"}</div></div><div class="leg"><div class="l">Подготовить</div><div class="v">на ${c.prep??"?"} чел.${c.due?" к "+esc(c.due):""}</div></div></div>
+    ${c.kind==="general"?`<div class="leg"><div class="l">🧽 Генеральная уборка</div><div class="v">${esc(c.note||"Полная уборка квартиры")}</div></div>`
+      :`<div class="flow"><div class="leg"><div class="l">Гость выезжает</div><div class="v">${x.out?.time||"до 12:00"}</div></div><div class="leg"><div class="l">Подготовить</div><div class="v">на ${c.prep??"?"} чел.${c.due?" к "+esc(c.due):""}</div></div></div>`}
+    ${others.length?`<div class="note">Вместе с: ${others.map(esc).join(", ")}</div>`:""}
     ${c.status==="remark"?`<div class="remark">Админ: ${esc(c.remark)}. Исправь и сфотографируй заново.</div>`:""}
     ${c.status==="ok"?`<div class="note">Уборка принята 👍</div>`:c.status==="review"?`<div class="note">Отправлено на проверку.</div>`:`
     <div class="photos">${SLOTS.map(([k,n])=>`<label class="ph ${up[k]?"done":""} ${up[k]==="busy"?"busy":""}">${up[k]&&up[k]!=="busy"?`<img alt="${n}" src="${up[k]}">`:`<span class="ic">+</span>${n}`}<input type="file" accept="image/*" capture="environment" data-ph="${c.id}" data-slot="${k}"></label>`).join("")}</div>
-    <div class="bar"><button class="go" data-done="${c.id}" ${Object.values(up).filter(v=>v!=="busy").length<4?"disabled":""}>Готово (${Object.values(up).filter(v=>v!=="busy").length}/4)</button><button class="warn" data-prob="${x.apartment_id}">Проблема</button></div>`}
+    <div class="bar"><button class="go" data-done="${c.id}" ${ready<4?"disabled":""}>Готово (${ready}/4)</button><button class="warn" data-prob="${x.apartment_id}">Проблема</button></div>`}
     ${ui.sheet==="prob"+x.apartment_id?probForm(x.apartment_id):""}
   </div>`}).join("")}`;
 }
@@ -257,14 +279,14 @@ function viewSal(){
   ${!act.length?`<div class="empty">За эту неделю завершённых уборок нет.</div>`:""}
   ${act.map(r=>`<div class="card" style="--sc:${r.paid?"var(--good)":"var(--amber)"}">
     <div class="h"><span class="apt">🐝 ${esc(r.name)}</span><span style="font-family:var(--mono);font-size:17px">${r.amount} лей</span></div>
-    <div class="note">${r.count} уборок · ${r.days} ${r.days===1?"день":r.days<5?"дня":"дней"}${r.remarks?` · замечаний: ${r.remarks}`:""}${r.no_rate?` · <span style="color:var(--amber)">не задана ставка — посчитано 0</span>`:""}</div>
-    <details><summary class="note" style="cursor:pointer">Кто, где, когда</summary><table><tbody>${r.items.map(i=>`<tr><td>${dm(i.date)}</td><td>${esc(i.apt)}</td><td class="n">${i.rate??0} лей</td><td>${mark[i.status]||i.status}</td></tr>`).join("")}</tbody></table></details>
+    <div class="note">${r.count} уборок · ${r.days} ${r.days===1?"день":r.days<5?"дня":"дней"}${r.general?` · генеральных: ${r.general}`:""}${r.remarks?` · замечаний: ${r.remarks}`:""}${r.no_rate?` · <span style="color:var(--amber)">не задана ставка — посчитано 0</span>`:""}</div>
+    <details><summary class="note" style="cursor:pointer">Кто, где, когда</summary><table><tbody>${r.items.map(i=>`<tr><td>${dm(i.date)}</td><td>${esc(i.apt)}</td><td class="n">${i.rate??0} лей</td><td>${i.kind==="general"?"генеральная":""}${i.team>1?" вдвоём":""} ${mark[i.status]||i.status}</td></tr>`).join("")}</tbody></table></details>
     <div class="bar">${r.paid?`${chip("Выплачено "+new Date(r.paid.at).toLocaleDateString("ru-RU"),"var(--good)")} <button class="sm" data-unpay="${r.staff_id}">Отменить</button>`:`<button class="go sm" data-payout="${r.staff_id}">Выплачено ${r.amount} лей</button>`}</div>
   </div>`).join("")}
   <div class="card"><div class="h"><span class="apt">Ставки за уборку</span><button class="sm" data-act="rates">${ui.sheet==="rates"?"Скрыть":"Настроить"}</button></div>
-  ${ui.sheet==="rates"?`<p class="note">Ставка пчёлки — по умолчанию. Если у квартиры своя ставка (большая квартира), она важнее.</p>
+  ${ui.sheet==="rates"?`<p class="note">Ставка пчёлки — по умолчанию. Если у квартиры своя ставка (большая квартира), она важнее. Генеральная — если не задана, считается ×2 от обычной. Если убирают вдвоём — ставка делится поровну, если в уборке не отмечено «каждой полная ставка».</p>
     <table><tbody>${(cache.pay||[]).map(p=>`<tr><td>🐝 ${esc(p.name)}</td><td><input type="number" min="0" style="width:110px" value="${p.rate??""}" data-srate="${p.staff_id}" placeholder="лей"></td></tr>`).join("")}</tbody></table>
-    <table><tbody>${(cache.rates||[]).map(a=>`<tr><td>${esc(a.name)}</td><td><input type="number" min="0" style="width:110px" value="${a.clean_rate_lei??""}" data-arate="${a.id}" placeholder="как у пчёлки"></td></tr>`).join("")}</tbody></table>`:""}</div>`;
+    <table><thead><tr><th>Квартира</th><th>Обычная</th><th>Генеральная</th></tr></thead><tbody>${(cache.rates||[]).map(a=>`<tr><td>${esc(a.name)}</td><td><input type="number" min="0" style="width:96px" value="${a.clean_rate_lei??""}" data-arate="${a.id}" placeholder="как у пчёлки"></td><td><input type="number" min="0" style="width:96px" value="${a.general_rate_lei??""}" data-grate="${a.id}" placeholder="×2"></td></tr>`).join("")}</tbody></table>`:""}</div>`;
 }
 
 function viewCal(){
@@ -339,6 +361,10 @@ document.addEventListener("click",async e=>{
     else if(d.cal){ui.cal=shiftDate(ui.cal,+d.cal);ui.bk=null;await load();return}
     else if(d.bk){ui.bk=+d.bk}
     else if(d.act==="closebk"){ui.bk=null}
+    else if(d.bee){const c=cache.day.flatMap(x=>[x.cleaning,x.general]).find(c=>c&&c.id===+d.bee);const ids=new Set((c?.cleaners||[]).map(p=>p.id));const sid=+d.sid;ids.has(sid)?ids.delete(sid):ids.add(sid);
+      await call("assign",{cleaning_id:+d.bee,cleaner_ids:[...ids]});toast(ids.has(sid)?"Назначено — пчёлка получила задание":"Пчёлка снята");await load();return}
+    else if(d.act==="general"){ui.sheet=ui.sheet==="general"?null:"general"}
+    else if(d.gdel){await call("general_delete",{cleaning_id:+d.gdel});toast("Генеральная удалена");await load();return}
     else if(d.copylink){const l=`https://t.me/${BOT}?start=${d.copylink}`;try{await navigator.clipboard.writeText(l);toast("Ссылка скопирована — отправь сотруднику")}catch(_){TG?.openTelegramLink?.(`https://t.me/share/url?url=${encodeURIComponent(l)}`)}return}
     else return;
     render();
@@ -347,7 +373,9 @@ document.addEventListener("click",async e=>{
 document.addEventListener("change",async e=>{
   const t=e.target;
   try{
+    if(t.dataset.payeach){await call("set_pay_each",{cleaning_id:+t.dataset.payeach,value:t.checked});toast(t.checked?"Каждой — полная ставка":"Ставка делится поровну");return}
     if(t.dataset.srate){await call("staff_rate",{id:+t.dataset.srate,rate_lei:t.value===""?null:+t.value});toast("Ставка сохранена");await load();return}
+    if(t.dataset.grate){await call("apt_grate",{id:+t.dataset.grate,rate_lei:t.value===""?null:+t.value});toast("Ставка генеральной сохранена");await load();return}
     if(t.dataset.arate){await call("apt_rate",{id:+t.dataset.arate,rate_lei:t.value===""?null:+t.value});toast("Ставка квартиры сохранена");await load();return}
     if(t.dataset.assign){if(!t.value)return;await call("assign",{cleaning_id:+t.dataset.assign,cleaner_id:+t.value});toast("Назначено — пчёлка получила сообщение");await load()}
     else if(t.dataset.ph){
@@ -362,6 +390,7 @@ document.addEventListener("submit",async e=>{
   e.preventDefault();const f=e.target,v=id=>document.getElementById(id)?.value;
   try{
     if(f.id==="exf"){const r=await call("booking_create",{apartment_id:+v("ex-a"),source:v("ex-src"),checkin:v("ex-ci"),checkout:v("ex-co"),checkin_time:v("ex-t")||null,guests:+v("ex-g")||null,price_total:v("ex-p")?+v("ex-p"):null,transfer_eur:v("ex-tr")?+v("ex-tr"):null,name:v("ex-n")||null,phone:v("ex-ph")||null});ui.sheet=null;toast("Бронь сохранена");await load();if(r.note)setTimeout(()=>toast(r.note),2400);return}
+    if(f.id==="genf"){const ids=[...document.querySelectorAll(".g-bee:checked")].map(x=>+x.value);await call("general_create",{apartment_id:+v("g-a"),date:v("g-d"),note:v("g-n")||null,cleaner_ids:ids});ui.sheet=null;ui.date=v("g-d");toast("Генеральная уборка создана");await load();return}
     if(f.dataset.payf){await call("pay",{booking_id:+f.dataset.payf,amount:+v("pa"),currency:v("pc"),method:ui.payM});ui.sheet=null;toast("Оплата записана");await load();return}
     if(f.id==="invf"){const r=await call("invite",{name:v("iv-n"),role:v("iv-r"),rate_lei:v("iv-rate")?+v("iv-rate"):null});const l=`https://t.me/${BOT}?start=${r.invite_code}`;cache.staff=await call("staff");render();try{await navigator.clipboard.writeText(l);toast("Приглашение создано, ссылка скопирована")}catch(_){toast("Приглашение создано — ссылка в таблице")}return}
     if(f.dataset.probf){
