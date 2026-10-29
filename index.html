@@ -90,6 +90,7 @@ async function call(action,body={}){
   return j.data??j;
 }
 const isAdmin=()=>me&&(me.role==="owner"||me.role==="admin");
+const canDispatch=()=>isAdmin()||me?.role==="dispatcher";
 
 async function boot(){
   const v=document.getElementById("view");
@@ -102,9 +103,9 @@ async function boot(){
     if(e.payload?.error==="not_registered"){v.innerHTML=`<div class="empty">Вы ещё не в команде.<br>Попросите админа прислать ссылку-приглашение.<br><br><span class="note">Ваш Telegram ID: ${e.payload.tg_id}</span></div>`;return}
     v.innerHTML=`<div class="empty">${esc(e.message)}</div>`;return;
   }
-  document.getElementById("who").textContent=me.name+" · "+({owner:"владелец",admin:"админ",cleaner:"пчёлка",master:"мастер",manager:"менеджер"}[me.role]||me.role);
+  document.getElementById("who").textContent=me.name+" · "+({owner:"владелец",admin:"админ",dispatcher:"помощник",cleaner:"пчёлка",master:"мастер",manager:"менеджер"}[me.role]||me.role);
   ui.tab=me.role==="master"?"rep":"day";
-  if(isAdmin()){[cache.staff,cache.apts]=await Promise.all([call("staff"),call("apartments")])} else {cache.apts=await call("apartments").catch(()=>[])}
+  if(canDispatch()){[cache.staff,cache.apts]=await Promise.all([call("staff"),call("apartments")])} else {cache.apts=await call("apartments").catch(()=>[])}
   await load();
 }
 async function load(){
@@ -119,7 +120,7 @@ async function load(){
   render();
 }
 function tabs(){
-  const t=me.role==="cleaner"?[["day","Мои уборки"],["rep","Ремонт"]]:me.role==="master"?[["rep","Ремонт"]]:
+  const t=me.role==="cleaner"?[["day","Мои уборки"],["rep","Ремонт"]]:me.role==="master"?[["rep","Ремонт"]]:me.role==="dispatcher"?[["day","График"],["rep","Ремонт"]]:
     [["day","График"],["pay","Оплаты"],["rep","Ремонт"],["team","Команда"]].concat(me.role==="owner"?[["money","Деньги"]]:[]);
   return t.map(([k,n])=>`<button class="${ui.tab===k?"on":""}" data-tab="${k}">${n}</button>`).join("");
 }
@@ -141,7 +142,7 @@ function viewDay(){
   const cleaners=cache.staff.filter(s=>s.role==="cleaner"&&s.active);
   return `${dateNav()}
   <div class="stats"><div class="st"><b>${n("wait")+n("progress")}</b><span>уборок осталось</span></div><div class="st"><b style="color:var(--violet)">${n("review")}</b><span>ждут проверки</span></div><div class="st"><b style="color:var(--amber)">${n("remark")}</b><span>замечания</span></div><div class="st"><b style="color:var(--good)">${n("ok")}</b><span>принято</span></div></div>
-  <div class="bar"><button class="go" data-act="extra">+ Бронь</button><button data-act="viber">Текст для Viber</button></div>
+  <div class="bar">${isAdmin()?`<button class="go" data-act="extra">+ Бронь</button>`:""}<button data-act="viber">Текст для Viber</button></div>
   ${ui.sheet==="extra"?extraForm():""}
   ${ui.sheet==="viber"?`<div class="sheet"><b>График на ${dm(ui.date)}</b><pre id="vtxt">${esc(viberText())}</pre><div class="bar"><button class="go" data-act="copy">Копировать</button><button data-act="close">Закрыть</button></div></div>`:""}
   ${!rows.length?`<div class="empty">На эту дату броней нет.<br><span class="note">Брони придут из Booking после подключения Beds24, или добавь вручную кнопкой «+ Бронь».</span></div>`:""}
@@ -153,7 +154,7 @@ function viewDay(){
       ${c.status==="review"?`<button class="sm go" data-ok="${c.id}" style="align-self:flex-end">Принять</button><button class="sm warn" data-rem="${c.id}" style="align-self:flex-end">Замечание</button>`:""}</div>`:""}
     ${ui.open==="gal"+c?.id?gallery(c.id):""}
     ${ui.sheet==="rem"+c?.id?`<div class="sheet"><textarea id="rt" rows="2" placeholder="Что исправить: например, сковородка слева грязная по краям"></textarea><div class="bar"><button class="go" data-dorem="${c.id}">Отправить пчёлке</button><button data-act="close">Отмена</button></div></div>`:""}
-    ${x.in?`<div class="bar">${!x.in.no_show&&ui.date<=today()?`<button class="sm" data-noshow="${x.in.id}">Незаезд</button>`:x.in.no_show?`<button class="sm" data-unnoshow="${x.in.id}">Отменить незаезд</button>`:""}<button class="sm" data-move="${x.in.id}">Переселить</button></div>`:""}
+    ${x.in&&isAdmin()?`<div class="bar">${!x.in.no_show&&ui.date<=today()?`<button class="sm" data-noshow="${x.in.id}">Незаезд</button>`:x.in.no_show?`<button class="sm" data-unnoshow="${x.in.id}">Отменить незаезд</button>`:""}<button class="sm" data-move="${x.in.id}">Переселить</button></div>`:""}
     ${ui.sheet==="move"+x.in?.id?`<div class="sheet"><label class="f">Переселить в<select id="mv">${cache.apts.filter(a=>a.id!==x.apartment_id).map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join("")}</select></label><p class="note">Проверю, свободна ли квартира на все ночи. Уборки и график пересчитаются.</p><div class="bar"><button class="go" data-domove="${x.in.id}">Переселить</button><button data-act="close">Отмена</button></div></div>`:""}
   </div>`}).join("")}
   ${stay.length?`<div class="card"><div class="h"><span class="apt">Продолжают проживать</span>${chip(stay.length+" кв.","var(--mute)")}</div><div class="note">${stay.map(s=>`${esc(s.apt)} — до ${dm(s.stay_until)}`).join(" · ")}</div></div>`:""}`;
@@ -217,9 +218,9 @@ function viewRep(){
 }
 
 function viewTeam(){
-  const role={owner:"владелец",admin:"админ",cleaner:"пчёлка",master:"мастер",manager:"менеджер"};
+  const role={owner:"владелец",admin:"админ",dispatcher:"помощник",cleaner:"пчёлка",master:"мастер",manager:"менеджер"};
   return `<h1>Команда</h1><p class="sub">Пригласи сотрудника: отправь ему ссылку, он откроет её в Telegram — и сразу в системе.</p>
-  <form class="sheet" id="invf"><div class="grid"><label class="f">Имя<input id="iv-n" required placeholder="Ольга"></label><label class="f">Роль<select id="iv-r"><option value="cleaner">🐝 Пчёлка</option><option value="master">Мастер</option><option value="manager">Менеджер</option>${me.role==="owner"?`<option value="admin">Админ</option>`:""}</select></label><label class="f">Ставка за уборку, лей<input id="iv-rate" type="number" min="0"></label></div><div class="bar"><button class="go" type="submit">Создать приглашение</button></div></form>
+  <form class="sheet" id="invf"><div class="grid"><label class="f">Имя<input id="iv-n" required placeholder="Ольга"></label><label class="f">Роль<select id="iv-r"><option value="cleaner">🐝 Пчёлка</option><option value="dispatcher">Помощник (распределяет уборки)</option><option value="master">Мастер</option><option value="manager">Менеджер</option>${me.role==="owner"?`<option value="admin">Админ</option>`:""}</select></label><label class="f">Ставка за уборку, лей<input id="iv-rate" type="number" min="0"></label></div><div class="bar"><button class="go" type="submit">Создать приглашение</button></div></form>
   <table><thead><tr><th>Имя</th><th>Роль</th><th>Статус</th><th></th></tr></thead><tbody>${cache.staff.map(s=>{const can=s.role!=="owner"&&s.id!==me.id&&(s.role!=="admin"||me.role==="owner");return `<tr style="${s.active?"":"opacity:.5"}"><td>${esc(s.name)}</td><td>${role[s.role]||s.role}</td>
     <td>${!s.active?chip("отключён","var(--bad)"):s.linked?chip("в системе","var(--good)"):s.invite_code?`<button class="sm" data-copylink="${s.invite_code}">Ссылка</button>`:"—"}</td>
     <td>${can?(s.active?`<button class="sm warn" data-off="${s.id}">Отключить</button> <button class="sm" data-relink="${s.id}" title="Если сменил телефон или Telegram">Новая ссылка</button>`:`<button class="sm" data-on="${s.id}">Вернуть</button>`):""}</td></tr>`}).join("")}</tbody></table>
