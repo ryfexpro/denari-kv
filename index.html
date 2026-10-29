@@ -56,6 +56,17 @@ pre{white-space:pre-wrap;background:var(--panel2);border:1px solid var(--line);b
 .empty{background:var(--panel);border:1px dashed var(--line);border-radius:14px;padding:22px;text-align:center;color:var(--mute)}
 table{width:100%;border-collapse:collapse;font-size:14px}th,td{text-align:left;padding:8px 6px;border-bottom:1px solid var(--line)}th{color:var(--mute);font-weight:500;font-size:12px}td.n{font-family:var(--mono);text-align:right}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(18px + env(safe-area-inset-bottom,0px));background:var(--fg);color:var(--bg);padding:10px 14px;border-radius:10px;font-weight:600;font-size:14px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:20;max-width:90vw;text-align:center}.toast.on{opacity:1}.toast.err{background:var(--bad);color:#fff}
+.cal{overflow-x:auto;border:1px solid var(--line);border-radius:14px;background:var(--panel)}
+.crow{display:grid;grid-template-columns:118px repeat(14,46px);min-height:38px;border-bottom:1px solid var(--line);position:relative}
+.crow:last-child{border-bottom:0}
+.cname{grid-column:1;grid-row:1;position:sticky;left:0;z-index:2;background:var(--panel);padding:8px;font-size:12.5px;font-weight:600;border-right:1px solid var(--line);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cday{grid-row:1;border-right:1px solid color-mix(in srgb,var(--line) 60%,transparent);position:relative}
+.cday.we{background:color-mix(in srgb,var(--fg) 3%,transparent)}.cday.td{background:color-mix(in srgb,var(--accent) 12%,transparent)}
+.chead .cday{font-size:11px;text-align:center;padding:4px 0;color:var(--mute);cursor:pointer;line-height:1.2}.chead .cday b{display:block;color:var(--fg);font-size:13px}
+.bk{grid-row:1;align-self:center;height:26px;border-radius:7px;background:color-mix(in srgb,var(--accent) 75%,var(--panel));color:#fff;font-size:11.5px;font-weight:600;padding:0 6px;display:flex;align-items:center;overflow:hidden;white-space:nowrap;cursor:pointer;z-index:1;border:0;font-family:inherit}
+.bk.ex{background:color-mix(in srgb,var(--pink) 70%,var(--panel))}.bk.ns{background:var(--line);color:var(--mute);text-decoration:line-through}
+.cdot{position:absolute;left:50%;bottom:3px;width:7px;height:7px;border-radius:50%;transform:translateX(-50%)}
+.occ .cday{font-family:var(--mono);font-size:11.5px;text-align:center;padding-top:10px;color:var(--mute)}
 .code{font-family:var(--mono);font-size:12.5px;word-break:break-all;background:var(--panel2);border-radius:8px;padding:8px}
 </style>
 </head>
@@ -70,7 +81,7 @@ table{width:100%;border-collapse:collapse;font-size:14px}th,td{text-align:left;p
 <div class="toast" id="toast"></div>
 <script>
 const API="https://zsrddmgiefmuwvcobkin.supabase.co/functions/v1/kv-api";
-const PAY_ACTIONS=new Set(["payroll","payout_mark","staff_rate","apt_rates","apt_rate"]);
+const PAY_ACTIONS=new Set(["payroll","payout_mark","staff_rate","apt_rates","apt_rate","calendar"]);
 const BOT="apartmanager_bot";
 const TG=window.Telegram?.WebApp; TG?.ready(); TG?.expand?.();
 const SLOTS=[["bath","Ванная"],["kitchen","Кухня"],["beds","Кровати"],["key","Ключ в ящике"]];
@@ -115,6 +126,7 @@ async function load(){
     if(me.role==="cleaner"&&ui.tab==="day") for(const x of cache.day){const c=x.cleaning;
       if(c&&c.status==="progress"&&c.photos>0&&!cache.up[c.id]){const g=await call("photos",{cleaning_id:c.id});cache.up[c.id]={};for(const p of g) if(!cache.up[c.id][p.slot]) cache.up[c.id][p.slot]=p.url}}
     if(ui.tab==="rep") cache.repairs=await call("repairs");
+    if(ui.tab==="cal"){if(!ui.cal)ui.cal=today(-2);cache.cal=await call("calendar",{from:ui.cal,to:shiftDate(ui.cal,13)})}
     if(ui.tab==="team") cache.staff=await call("staff");
     if(ui.tab==="sal"){if(!ui.wk)ui.wk=weekOf(today(-7));cache.pay=await call("payroll",{from:ui.wk[0],to:ui.wk[1]});if(ui.sheet==="rates")cache.rates=await call("apt_rates")}
     if(ui.tab==="money") cache.money=await call("money",{from:ui.date.slice(0,8)+"01",to:ui.date});
@@ -122,8 +134,8 @@ async function load(){
   render();
 }
 function tabs(){
-  const t=me.role==="cleaner"?[["day","Мои уборки"],["rep","Ремонт"]]:me.role==="master"?[["rep","Ремонт"]]:me.role==="dispatcher"?[["day","График"],["rep","Ремонт"]]:
-    [["day","График"],["pay","Оплаты"],["sal","Зарплаты"],["rep","Ремонт"],["team","Команда"]].concat(me.role==="owner"?[["money","Деньги"]]:[]);
+  const t=me.role==="cleaner"?[["day","Мои уборки"],["rep","Ремонт"]]:me.role==="master"?[["rep","Ремонт"]]:me.role==="dispatcher"?[["day","График"],["cal","Календарь"],["rep","Ремонт"]]:me.role==="manager"?[["day","График"],["cal","Календарь"],["pay","Оплаты"]]:
+    [["day","График"],["cal","Календарь"],["pay","Оплаты"],["sal","Зарплаты"],["rep","Ремонт"],["team","Команда"]].concat(me.role==="owner"?[["money","Деньги"]]:[]);
   return t.map(([k,n])=>`<button class="${ui.tab===k?"on":""}" data-tab="${k}">${n}</button>`).join("");
 }
 function dateNav(){return `<div class="dnav"><button class="sm" data-d="-1">‹</button><b>${ru(ui.date)}${ui.date===today()?" · сегодня":ui.date===today(1)?" · завтра":""}</b><button class="sm" data-d="1">›</button></div>`}
@@ -255,9 +267,31 @@ function viewSal(){
     <table><tbody>${(cache.rates||[]).map(a=>`<tr><td>${esc(a.name)}</td><td><input type="number" min="0" style="width:110px" value="${a.clean_rate_lei??""}" data-arate="${a.id}" placeholder="как у пчёлки"></td></tr>`).join("")}</tbody></table>`:""}</div>`;
 }
 
+function viewCal(){
+  const c=cache.cal||{apts:[],bookings:[],cleanings:[]};const days=[...Array(14)].map((_,i)=>shiftDate(ui.cal,i));const last=days[13],td=today();
+  const di=d=>days.indexOf(d), wd=d=>new Date(d+"T12:00").getDay();
+  const cells=d=>`class="cday ${wd(d)%6===0?"we":""} ${d===td?"td":""}"`;
+  const SC={wait:"var(--mute)",progress:"var(--accent)",review:"var(--violet)",remark:"var(--amber)",ok:"var(--good)"};
+  const occ=days.map(d=>c.bookings.filter(b=>!b.no_show&&b.checkin<=d&&b.checkout>d).length);
+  const row=a=>{
+    const bs=c.bookings.filter(b=>b.apartment_id===a.id), cl=c.cleanings.filter(x=>x.apartment_id===a.id);
+    return `<div class="crow"><div class="cname" title="${esc(a.name)}">${esc(a.name)}</div>${days.map((d,i)=>`<div ${cells(d)} style="grid-column:${i+2}">${(()=>{const x=cl.find(x=>x.date===d);return x?`<span class="cdot" style="background:${SC[x.status]}" title="Уборка: ${x.cleaner||"не назначена"}"></span>`:""})()}</div>`).join("")}
+    ${bs.map(b=>{const si=b.checkin<ui.cal?0:di(b.checkin), ei=b.checkout>last?14:di(b.checkout);if(si<0||ei<0&&b.checkout<=last)return "";const e=ei<0?14:ei;
+      const ml=b.checkin<ui.cal?0:23, mr=b.checkout>last?0:23;
+      return `<button class="bk ${b.source==="extra"?"ex":""} ${b.no_show?"ns":""}" style="grid-column:${si+2}/${b.checkout>last?16:e+3};margin-left:${ml}px;margin-right:${mr}px" data-bk="${b.id}">${esc(b.guest_name||"гость")}${b.guests?" · "+b.guests:""}</button>`}).join("")}</div>`};
+  const sel=ui.bk&&c.bookings.find(b=>b.id===ui.bk), selApt=sel&&c.apts.find(a=>a.id===sel.apartment_id);
+  return `<div class="dnav"><button class="sm" data-cal="-7">‹</button><b>${dm(ui.cal)} – ${dm(last)}</b><button class="sm" data-cal="7">›</button></div>
+  <div class="bar"><span class="chip" style="--c:var(--accent)">Booking</span><span class="chip" style="--c:var(--pink)">Экстра</span><span class="note">● уборка: серая — ждёт, синяя — убирают, фиолетовая — проверка, зелёная — принята</span></div>
+  <div class="cal"><div class="crow chead"><div class="cname">Квартира</div>${days.map((d,i)=>`<div ${cells(d)} style="grid-column:${i+2}" data-goday="${d}">${["вс","пн","вт","ср","чт","пт","сб"][wd(d)]}<b>${+d.slice(8,10)}</b></div>`).join("")}</div>
+  ${c.apts.map(row).join("")}
+  <div class="crow occ"><div class="cname">Занято</div>${days.map((d,i)=>`<div ${cells(d)} style="grid-column:${i+2};color:${occ[i]>=c.apts.length*0.8?"var(--good)":occ[i]<=c.apts.length*0.4?"var(--amber)":"var(--mute)"}">${occ[i]}/${c.apts.length}</div>`).join("")}</div></div>
+  <p class="note">Нажми на бронь — подробности. Нажми на дату — откроется график этого дня.</p>
+  ${sel?`<div class="sheet"><b>${esc(selApt?.name)} · ${esc(sel.guest_name||"гость")}</b><div class="note">${dm(sel.checkin)} → ${dm(sel.checkout)} · ${sel.guests??"?"} взр${sel.checkin_time?" · заезд "+esc(sel.checkin_time):""} · ${sel.source==="extra"?"экстра":"Booking"}${sel.price!=null?` · ${sel.price} ${sel.currency}`:""}${sel.no_show?" · незаезд":""}</div><div class="bar"><button class="sm" data-goday="${sel.checkin}">Открыть день заезда</button><button class="sm" data-act="closebk">Закрыть</button></div></div>`:""}`;
+}
+
 function render(){
   document.getElementById("tabs").innerHTML=tabs();
-  document.getElementById("view").innerHTML=ui.tab==="sal"?viewSal():ui.tab==="pay"?viewPay():ui.tab==="rep"?viewRep():ui.tab==="team"?viewTeam():ui.tab==="money"?viewMoney():viewDay();
+  document.getElementById("view").innerHTML=ui.tab==="cal"?viewCal():ui.tab==="sal"?viewSal():ui.tab==="pay"?viewPay():ui.tab==="rep"?viewRep():ui.tab==="team"?viewTeam():ui.tab==="money"?viewMoney():viewDay();
 }
 
 async function compress(file){
@@ -273,6 +307,7 @@ async function upload(url,blob){
 }
 
 document.addEventListener("click",async e=>{
+  const g=e.target.closest("[data-goday]");if(g){ui.date=g.dataset.goday;ui.tab="day";ui.sheet=null;ui.bk=null;await load();return}
   const b=e.target.closest("button");if(!b)return;const d=b.dataset;
   try{
     if(d.tab){ui.tab=d.tab;ui.sheet=null;ui.open=null;await load();return}
@@ -301,6 +336,9 @@ document.addEventListener("click",async e=>{
     else if(d.act==="rates"){ui.sheet=ui.sheet==="rates"?null:"rates";await load();return}
     else if(d.payout){await call("payout_mark",{staff_id:+d.payout,from:ui.wk[0],to:ui.wk[1]});toast("Отмечено: выплачено");await load();return}
     else if(d.unpay){await call("payout_mark",{staff_id:+d.unpay,from:ui.wk[0],to:ui.wk[1],undo:true});await load();return}
+    else if(d.cal){ui.cal=shiftDate(ui.cal,+d.cal);ui.bk=null;await load();return}
+    else if(d.bk){ui.bk=+d.bk}
+    else if(d.act==="closebk"){ui.bk=null}
     else if(d.copylink){const l=`https://t.me/${BOT}?start=${d.copylink}`;try{await navigator.clipboard.writeText(l);toast("Ссылка скопирована — отправь сотруднику")}catch(_){TG?.openTelegramLink?.(`https://t.me/share/url?url=${encodeURIComponent(l)}`)}return}
     else return;
     render();
