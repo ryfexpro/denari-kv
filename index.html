@@ -220,7 +220,11 @@ function viewTeam(){
   const role={owner:"владелец",admin:"админ",cleaner:"пчёлка",master:"мастер",manager:"менеджер"};
   return `<h1>Команда</h1><p class="sub">Пригласи сотрудника: отправь ему ссылку, он откроет её в Telegram — и сразу в системе.</p>
   <form class="sheet" id="invf"><div class="grid"><label class="f">Имя<input id="iv-n" required placeholder="Ольга"></label><label class="f">Роль<select id="iv-r"><option value="cleaner">🐝 Пчёлка</option><option value="master">Мастер</option><option value="manager">Менеджер</option>${me.role==="owner"?`<option value="admin">Админ</option>`:""}</select></label><label class="f">Ставка за уборку, лей<input id="iv-rate" type="number" min="0"></label></div><div class="bar"><button class="go" type="submit">Создать приглашение</button></div></form>
-  <table><thead><tr><th>Имя</th><th>Роль</th><th>Статус</th></tr></thead><tbody>${cache.staff.map(s=>`<tr><td>${esc(s.name)}</td><td>${role[s.role]||s.role}</td><td>${s.linked?chip("в системе","var(--good)"):s.invite_code?`<button class="sm" data-copylink="${s.invite_code}">Ссылка-приглашение</button>`:"—"}</td></tr>`).join("")}</tbody></table>`;
+  <table><thead><tr><th>Имя</th><th>Роль</th><th>Статус</th><th></th></tr></thead><tbody>${cache.staff.map(s=>{const can=s.role!=="owner"&&s.id!==me.id&&(s.role!=="admin"||me.role==="owner");return `<tr style="${s.active?"":"opacity:.5"}"><td>${esc(s.name)}</td><td>${role[s.role]||s.role}</td>
+    <td>${!s.active?chip("отключён","var(--bad)"):s.linked?chip("в системе","var(--good)"):s.invite_code?`<button class="sm" data-copylink="${s.invite_code}">Ссылка</button>`:"—"}</td>
+    <td>${can?(s.active?`<button class="sm warn" data-off="${s.id}">Отключить</button> <button class="sm" data-relink="${s.id}" title="Если сменил телефон или Telegram">Новая ссылка</button>`:`<button class="sm" data-on="${s.id}">Вернуть</button>`):""}</td></tr>`}).join("")}</tbody></table>
+  ${ui.sheet&&ui.sheet.startsWith("off")?`<div class="sheet"><b>Отключить ${esc(cache.staff.find(x=>"off"+x.id===ui.sheet)?.name)}?</b><p class="note">Доступ закроется сразу. Его будущие уборки станут «не назначены» — их нужно будет отдать другой пчёлке. Историю и фото сохраним.</p><div class="bar"><button class="go" data-dooff="${ui.sheet.slice(3)}">Отключить</button><button data-act="close">Отмена</button></div></div>`:""}
+  <p class="note">Пароли не нужны: вход только через Telegram сотрудника. Уволился — «Отключить», доступ пропадает мгновенно. Сменил телефон — «Новая ссылка».</p>`;
 }
 function viewMoney(){
   const m=cache.money||[];const meth={cash:"Наличные",card:"Карта",revolut:"Revolut",ota:"Booking"};
@@ -266,6 +270,10 @@ document.addEventListener("click",async e=>{
     else if(d.rs){await call("repair_update",{id:+d.rs,status:d.to});toast(d.to==="work"?"Взято в работу":"Отмечено: сделано");await load();return}
     else if(d.done){await call("done",{cleaning_id:+d.done});delete cache.up[+d.done];toast("Отправлено админу на проверку");await load();return}
     else if(d.prob){ui.sheet=ui.sheet==="prob"+d.prob?null:"prob"+d.prob}
+    else if(d.off){ui.sheet="off"+d.off}
+    else if(d.dooff){const r=await call("staff_set_active",{id:+d.dooff,active:false});ui.sheet=null;cache.staff=await call("staff");toast(r.freed?`Отключён. Освободилось уборок: ${r.freed} — назначь другую пчёлку`:"Сотрудник отключён")}
+    else if(d.on){await call("staff_set_active",{id:+d.on,active:true});cache.staff=await call("staff");toast("Доступ возвращён")}
+    else if(d.relink){const r=await call("staff_relink",{id:+d.relink});cache.staff=await call("staff");const l=`https://t.me/${BOT}?start=${r.invite_code}`;try{await navigator.clipboard.writeText(l);toast("Старый вход отключён, новая ссылка скопирована")}catch(_){toast("Новая ссылка — в таблице")}}
     else if(d.copylink){const l=`https://t.me/${BOT}?start=${d.copylink}`;try{await navigator.clipboard.writeText(l);toast("Ссылка скопирована — отправь сотруднику")}catch(_){TG?.openTelegramLink?.(`https://t.me/share/url?url=${encodeURIComponent(l)}`)}return}
     else return;
     render();
