@@ -94,7 +94,7 @@ const isAdmin=()=>me&&(me.role==="owner"||me.role==="admin");
 async function boot(){
   const v=document.getElementById("view");
   if(!TG?.initData){v.innerHTML=`<div class="empty">Откройте приложение через Telegram-бота <b>@${BOT}</b>.</div>`;return}
-  const code=TG.initDataUnsafe?.start_param;
+  const code=TG.initDataUnsafe?.start_param||new URLSearchParams(location.search).get("c");
   try{
     if(code){try{const r=await call("bind",{code});toast("Добро пожаловать, "+r.staff.name)}catch(e){if(e.status!==404)throw e}}
     me=await call("me");
@@ -266,7 +266,7 @@ document.addEventListener("click",async e=>{
     else if(d.rs){await call("repair_update",{id:+d.rs,status:d.to});toast(d.to==="work"?"Взято в работу":"Отмечено: сделано");await load();return}
     else if(d.done){await call("done",{cleaning_id:+d.done});delete cache.up[+d.done];toast("Отправлено админу на проверку");await load();return}
     else if(d.prob){ui.sheet=ui.sheet==="prob"+d.prob?null:"prob"+d.prob}
-    else if(d.copylink){const l=`https://t.me/${BOT}?startapp=${d.copylink}`;try{await navigator.clipboard.writeText(l);toast("Ссылка скопирована — отправь сотруднику")}catch(_){TG?.openTelegramLink?.(`https://t.me/share/url?url=${encodeURIComponent(l)}`)}return}
+    else if(d.copylink){const l=`https://t.me/${BOT}?start=${d.copylink}`;try{await navigator.clipboard.writeText(l);toast("Ссылка скопирована — отправь сотруднику")}catch(_){TG?.openTelegramLink?.(`https://t.me/share/url?url=${encodeURIComponent(l)}`)}return}
     else return;
     render();
   }catch(err){toast(err.message,1)}
@@ -288,7 +288,7 @@ document.addEventListener("submit",async e=>{
   try{
     if(f.id==="exf"){const r=await call("booking_create",{apartment_id:+v("ex-a"),source:v("ex-src"),checkin:v("ex-ci"),checkout:v("ex-co"),checkin_time:v("ex-t")||null,guests:+v("ex-g")||null,price_total:v("ex-p")?+v("ex-p"):null,transfer_eur:v("ex-tr")?+v("ex-tr"):null,name:v("ex-n")||null,phone:v("ex-ph")||null});ui.sheet=null;toast("Бронь сохранена");await load();if(r.note)setTimeout(()=>toast(r.note),2400);return}
     if(f.dataset.payf){await call("pay",{booking_id:+f.dataset.payf,amount:+v("pa"),currency:v("pc"),method:ui.payM});ui.sheet=null;toast("Оплата записана");await load();return}
-    if(f.id==="invf"){const r=await call("invite",{name:v("iv-n"),role:v("iv-r"),rate_lei:v("iv-rate")?+v("iv-rate"):null});const l=`https://t.me/${BOT}?startapp=${r.invite_code}`;cache.staff=await call("staff");render();try{await navigator.clipboard.writeText(l);toast("Приглашение создано, ссылка скопирована")}catch(_){toast("Приглашение создано — ссылка в таблице")}return}
+    if(f.id==="invf"){const r=await call("invite",{name:v("iv-n"),role:v("iv-r"),rate_lei:v("iv-rate")?+v("iv-rate"):null});const l=`https://t.me/${BOT}?start=${r.invite_code}`;cache.staff=await call("staff");render();try{await navigator.clipboard.writeText(l);toast("Приглашение создано, ссылка скопирована")}catch(_){toast("Приглашение создано — ссылка в таблице")}return}
     if(f.dataset.probf){
       const aid=f.dataset.probf==="any"?+v("pa-apt"):+f.dataset.probf;let path=null;const file=document.getElementById("pf")?.files?.[0];
       if(file){const u=await call("repair_upload_url",{apartment_id:aid});if(await upload(u.url,await compress(file)))path=u.path}
