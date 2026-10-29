@@ -102,7 +102,7 @@ async function boot(){
     if(e.payload?.error==="not_registered"){v.innerHTML=`<div class="empty">Вы ещё не в команде.<br>Попросите админа прислать ссылку-приглашение.<br><br><span class="note">Ваш Telegram ID: ${e.payload.tg_id}</span></div>`;return}
     v.innerHTML=`<div class="empty">${esc(e.message)}</div>`;return;
   }
-  document.getElementById("who").textContent=me.name+" · "+({owner:"владелец",admin:"админ",cleaner:"уборщица",master:"мастер",manager:"менеджер"}[me.role]||me.role);
+  document.getElementById("who").textContent=me.name+" · "+({owner:"владелец",admin:"админ",cleaner:"пчёлка",master:"мастер",manager:"менеджер"}[me.role]||me.role);
   ui.tab=me.role==="master"?"rep":"day";
   if(isAdmin()){[cache.staff,cache.apts]=await Promise.all([call("staff"),call("apartments")])} else {cache.apts=await call("apartments").catch(()=>[])}
   await load();
@@ -148,11 +148,11 @@ function viewDay(){
   ${rows.filter(x=>x.cleaning||x.in).map(x=>{const c=x.cleaning;const [sn,sc]=c?SS[c.status]:["Без уборки","var(--line)"];return `<div class="card" style="--sc:${sc}">
     <div class="h"><span class="apt">${esc(x.apt)}</span>${c?chip(sn,sc):""}</div>${legs(x)}
     ${c?.status==="remark"&&c.remark?`<div class="remark">Замечание: ${esc(c.remark)}</div>`:""}
-    ${c?`<div class="bar"><label class="f" style="flex:0 1 190px">Уборщица<select data-assign="${c.id}"><option value="">— не назначена —</option>${cleaners.map(s=>`<option value="${s.id}" ${s.id===c.cleaner_id?"selected":""}>${esc(s.name)}</option>`).join("")}</select></label>
+    ${c?`<div class="bar"><label class="f" style="flex:0 1 190px">🐝 Пчёлка<select data-assign="${c.id}"><option value="">— не назначена —</option>${cleaners.map(s=>`<option value="${s.id}" ${s.id===c.cleaner_id?"selected":""}>${esc(s.name)}</option>`).join("")}</select></label>
       <button class="sm" data-gal="${c.id}" style="align-self:flex-end">Фото (${c.photos})</button>
       ${c.status==="review"?`<button class="sm go" data-ok="${c.id}" style="align-self:flex-end">Принять</button><button class="sm warn" data-rem="${c.id}" style="align-self:flex-end">Замечание</button>`:""}</div>`:""}
     ${ui.open==="gal"+c?.id?gallery(c.id):""}
-    ${ui.sheet==="rem"+c?.id?`<div class="sheet"><textarea id="rt" rows="2" placeholder="Что исправить: например, сковородка слева грязная по краям"></textarea><div class="bar"><button class="go" data-dorem="${c.id}">Отправить уборщице</button><button data-act="close">Отмена</button></div></div>`:""}
+    ${ui.sheet==="rem"+c?.id?`<div class="sheet"><textarea id="rt" rows="2" placeholder="Что исправить: например, сковородка слева грязная по краям"></textarea><div class="bar"><button class="go" data-dorem="${c.id}">Отправить пчёлке</button><button data-act="close">Отмена</button></div></div>`:""}
     ${x.in?`<div class="bar">${!x.in.no_show&&ui.date<=today()?`<button class="sm" data-noshow="${x.in.id}">Незаезд</button>`:x.in.no_show?`<button class="sm" data-unnoshow="${x.in.id}">Отменить незаезд</button>`:""}<button class="sm" data-move="${x.in.id}">Переселить</button></div>`:""}
     ${ui.sheet==="move"+x.in?.id?`<div class="sheet"><label class="f">Переселить в<select id="mv">${cache.apts.filter(a=>a.id!==x.apartment_id).map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join("")}</select></label><p class="note">Проверю, свободна ли квартира на все ночи. Уборки и график пересчитаются.</p><div class="bar"><button class="go" data-domove="${x.in.id}">Переселить</button><button data-act="close">Отмена</button></div></div>`:""}
   </div>`}).join("")}
@@ -217,9 +217,9 @@ function viewRep(){
 }
 
 function viewTeam(){
-  const role={owner:"владелец",admin:"админ",cleaner:"уборщица",master:"мастер",manager:"менеджер"};
+  const role={owner:"владелец",admin:"админ",cleaner:"пчёлка",master:"мастер",manager:"менеджер"};
   return `<h1>Команда</h1><p class="sub">Пригласи сотрудника: отправь ему ссылку, он откроет её в Telegram — и сразу в системе.</p>
-  <form class="sheet" id="invf"><div class="grid"><label class="f">Имя<input id="iv-n" required placeholder="Ольга"></label><label class="f">Роль<select id="iv-r"><option value="cleaner">Уборщица</option><option value="master">Мастер</option><option value="manager">Менеджер</option>${me.role==="owner"?`<option value="admin">Админ</option>`:""}</select></label><label class="f">Ставка за уборку, лей<input id="iv-rate" type="number" min="0"></label></div><div class="bar"><button class="go" type="submit">Создать приглашение</button></div></form>
+  <form class="sheet" id="invf"><div class="grid"><label class="f">Имя<input id="iv-n" required placeholder="Ольга"></label><label class="f">Роль<select id="iv-r"><option value="cleaner">🐝 Пчёлка</option><option value="master">Мастер</option><option value="manager">Менеджер</option>${me.role==="owner"?`<option value="admin">Админ</option>`:""}</select></label><label class="f">Ставка за уборку, лей<input id="iv-rate" type="number" min="0"></label></div><div class="bar"><button class="go" type="submit">Создать приглашение</button></div></form>
   <table><thead><tr><th>Имя</th><th>Роль</th><th>Статус</th></tr></thead><tbody>${cache.staff.map(s=>`<tr><td>${esc(s.name)}</td><td>${role[s.role]||s.role}</td><td>${s.linked?chip("в системе","var(--good)"):s.invite_code?`<button class="sm" data-copylink="${s.invite_code}">Ссылка-приглашение</button>`:"—"}</td></tr>`).join("")}</tbody></table>`;
 }
 function viewMoney(){
@@ -274,7 +274,7 @@ document.addEventListener("click",async e=>{
 document.addEventListener("change",async e=>{
   const t=e.target;
   try{
-    if(t.dataset.assign){if(!t.value)return;await call("assign",{cleaning_id:+t.dataset.assign,cleaner_id:+t.value});toast("Назначено — уборщица получила сообщение");await load()}
+    if(t.dataset.assign){if(!t.value)return;await call("assign",{cleaning_id:+t.dataset.assign,cleaner_id:+t.value});toast("Назначено — пчёлка получила сообщение");await load()}
     else if(t.dataset.ph){
       const f=t.files[0];if(!f)return;const id=+t.dataset.ph,slot=t.dataset.slot;cache.up[id]=cache.up[id]||{};cache.up[id][slot]="busy";render();
       const blob=await compress(f);const u=await call("photo_upload_url",{cleaning_id:id,slot});
