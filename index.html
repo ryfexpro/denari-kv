@@ -83,6 +83,7 @@ table{width:100%;border-collapse:collapse;font-size:14px}th,td{text-align:left;p
 <script>
 const API="https://zsrddmgiefmuwvcobkin.supabase.co/functions/v1/kv-api";
 const PAY_ACTIONS=new Set(["payroll","payout_mark","staff_rate","apt_rates","apt_rate","apt_grate","calendar"]);
+const TR_ACTIONS=new Set(["transfer_create","transfer_cancel"]);
 const BOT="apartmanager_bot";
 const TG=window.Telegram?.WebApp; TG?.ready(); TG?.expand?.();
 let SLOTS=[["rooms","Комнаты"],["kitchen","Кухня"],["bath","Туалет и ванная"],["wardrobe","Шкафы"],["fridge","Холодильник"],["microwave","Микроволновка"],["linen","Шкаф с доп. бельём"],["key","Ключи в локбоксе"]];
@@ -98,7 +99,7 @@ const ru=s=>{const d=new Date(s+"T12:00:00");return d.toLocaleDateString("ru-RU"
 const dm=s=>s?s.slice(8,10)+"."+s.slice(5,7):"";
 function toast(m,err){const t=document.getElementById("toast");t.textContent=m;t.className="toast on"+(err?" err":"");clearTimeout(toast.h);toast.h=setTimeout(()=>t.className="toast",err?3500:2200);try{TG?.HapticFeedback?.notificationOccurred(err?"error":"success")}catch(e){}}
 async function call(action,body={}){
-  const r=await fetch(PAY_ACTIONS.has(action)?API.replace("kv-api","kv-pay"):API,{method:"POST",headers:{"content-type":"application/json","x-tg-init":TG?.initData||""},body:JSON.stringify({action,...body})});
+  const r=await fetch(PAY_ACTIONS.has(action)?API.replace("kv-api","kv-pay"):TR_ACTIONS.has(action)?API.replace("kv-api","kv-transfer"):API,{method:"POST",headers:{"content-type":"application/json","x-tg-init":TG?.initData||""},body:JSON.stringify({action,...body})});
   const j=await r.json().catch(()=>({error:"Нет связи с сервером"}));
   if(!r.ok||j.error){const e=new Error(j.error||"Ошибка");e.payload=j;e.status=r.status;throw e}
   return j.data??j;
@@ -146,8 +147,8 @@ function tabs(){
 function dateNav(){return `<div class="dnav"><button class="sm" data-d="-1">‹</button><b>${ru(ui.date)}${ui.date===today()?" · сегодня":ui.date===today(1)?" · завтра":""}</b><button class="sm" data-d="1">›</button></div>`}
 
 function legs(x){
-  const o=x.out?`<div class="leg"><div class="l">Выезд</div><div class="v">${esc(x.out.name||"гость")}${x.out.time?" · "+esc(x.out.time):""}</div></div>`:`<div class="leg"><div class="l">Выезд</div><div class="m">нет</div></div>`;
-  const i=x.in?`<div class="leg"><div class="l">Заезд ${x.in.source==="extra"?chip("Экстра","var(--pink)"):""} ${x.in.no_show?chip("Незаезд","var(--bad)"):""} ${isAdmin()&&x.in.guest_status?chip(GS[x.in.guest_status][0],GS[x.in.guest_status][1]):""}</div><div class="v">${esc(x.in.name||"гость")} · ${x.in.guests??"?"} взр · ${x.in.nights} ${x.in.nights>1?"ночи":"ночь"}${x.in.time?" · "+esc(x.in.time):""}</div>${isAdmin()&&x.in.price!=null?`<div class="m">${payLabel(x.in)} · ${x.in.price} ${x.in.currency}</div>`:""}</div>`
+  const o=x.out?`<div class="leg"><div class="l">Выезд ${(x.out.transfers||[]).map(t=>chip("🚗 "+t.time,"var(--accent)")).join(" ")}</div><div class="v">${esc(x.out.name||"гость")}${x.out.time?" · "+esc(x.out.time):""}</div></div>`:`<div class="leg"><div class="l">Выезд</div><div class="m">нет</div></div>`;
+  const i=x.in?`<div class="leg"><div class="l">Заезд ${x.in.source==="extra"?chip("Экстра","var(--pink)"):""} ${x.in.no_show?chip("Незаезд","var(--bad)"):""} ${(x.in.transfers||[]).map(t=>chip("🚗 "+t.time,"var(--accent)")).join(" ")} ${isAdmin()&&x.in.guest_status?chip(GS[x.in.guest_status][0],GS[x.in.guest_status][1]):""}</div><div class="v">${esc(x.in.name||"гость")} · ${x.in.guests??"?"} взр · ${x.in.nights} ${x.in.nights>1?"ночи":"ночь"}${x.in.time?" · "+esc(x.in.time):""}</div>${isAdmin()&&x.in.price!=null?`<div class="m">${payLabel(x.in)} · ${x.in.price} ${x.in.currency}</div>`:""}</div>`
     :x.stay_until?`<div class="leg"><div class="l">Проживают</div><div class="v">до ${dm(x.stay_until)}</div></div>`
     :`<div class="leg"><div class="l">Заезд</div><div class="v">Подготовить на ${x.cleaning?.prep??"?"}</div></div>`;
   return `<div class="flow">${o}${i}</div>`;
@@ -191,7 +192,8 @@ function viewDay(){
     <div class="h"><span class="apt">${esc(x.apt)}</span>${c?chip(sn,sc):""}</div>${(x.out||x.in||c)?legs(x):""}
     ${c?cleanBlock(c):""}
     ${x.general?`${c?'<hr style="border:0;border-top:1px dashed var(--line);width:100%;margin:0">':""}${cleanBlock(x.general)}`:""}
-    ${x.in&&isAdmin()?`<div class="bar">${!x.in.no_show&&ui.date<=today()?`<button class="sm" data-noshow="${x.in.id}">Незаезд</button>`:x.in.no_show?`<button class="sm" data-unnoshow="${x.in.id}">Отменить незаезд</button>`:""}<button class="sm" data-move="${x.in.id}">Переселить</button></div>`:""}
+    ${x.in&&isAdmin()?`<div class="bar">${!x.in.no_show&&ui.date<=today()?`<button class="sm" data-noshow="${x.in.id}">Незаезд</button>`:x.in.no_show?`<button class="sm" data-unnoshow="${x.in.id}">Отменить незаезд</button>`:""}<button class="sm" data-move="${x.in.id}">Переселить</button><button class="sm" data-trday="${x.in.id}" data-apt="${esc(x.apt)}" data-g="${x.in.guests||""}" data-n="${x.in.nights}">+ Трансфер</button></div>`:""}
+    ${ui.sheet==="tr"+x.in?.id&&ui.trg?.id===x.in.id?transferForm(ui.trg):""}
     ${ui.sheet==="move"+x.in?.id?`<div class="sheet"><label class="f">Переселить в<select id="mv">${cache.apts.filter(a=>a.id!==x.apartment_id).map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join("")}</select></label><p class="note">Проверю, свободна ли квартира на все ночи. Уборки и график пересчитаются.</p><div class="bar"><button class="go" data-domove="${x.in.id}">Переселить</button><button data-act="close">Отмена</button></div></div>`:""}
   </div>`}).join("")}
   ${stay.length?`<div class="card"><div class="h"><span class="apt">Продолжают проживать</span>${chip(stay.length+" кв.","var(--mute)")}</div><div class="note">${stay.map(s=>`${esc(s.apt)} — до ${dm(s.stay_until)}`).join(" · ")}</div></div>`:""}`;
@@ -321,6 +323,28 @@ function viewCal(){
   ${sel?`<div class="sheet"><b>${esc(selApt?.name)} · ${esc(sel.guest_name||"гость")}</b><div class="note">${dm(sel.checkin)} → ${dm(sel.checkout)} · ${sel.guests??"?"} взр${sel.checkin_time?" · заезд "+esc(sel.checkin_time):""} · ${sel.source==="extra"?"экстра":"Booking"}${sel.price!=null?` · ${sel.price} ${sel.currency}`:""}${sel.no_show?" · незаезд":""}</div><div class="bar"><button class="sm" data-goday="${sel.checkin}">Открыть день заезда</button><button class="sm" data-act="closebk">Закрыть</button></div></div>`:""}`;
 }
 
+// ---------- Трансфер (пишется в TMA Travel Moldova) ----------
+const AIRPORT="Аэропорт Кишинёв";
+const canTransfer=()=>isAdmin()||me?.role==="manager";
+function trDefaults(g,dir){const home=g.address||g.apt||"";const ppl=g.guests||2;
+  return dir==="out"?{date:g.checkout||g.checkin,time:"10:00",from:home,to:AIRPORT,people:ppl,price:ppl>4?50:30}
+    :dir==="in"?{date:g.checkin,time:g.guest?.arrival_time&&/^\d{1,2}:\d{2}/.test(g.guest.arrival_time)?g.guest.arrival_time.padStart(5,"0").slice(0,5):"14:00",from:AIRPORT,to:home,people:ppl,price:ppl>4?50:30}
+    :{date:g.checkin,time:"12:00",from:"",to:"",people:ppl,price:""}}
+function transferList(g){const T=g.transfers||[];if(!T.length)return "";
+  return T.map(t=>`<div class="leg" style="display:flex;gap:8px;align-items:center;justify-content:space-between"><div><div class="l">🚗 Трансфер · в TMA ${t.tma?"✓":""}</div><div class="v">${dm(t.date)} ${esc(t.time)} · ${esc(t.from)} → ${esc(t.to)}</div><div class="m">${t.people?t.people+" чел.":""}${t.price!=null?" · "+t.price+" €":""}</div></div>
+    ${canTransfer()?`<button class="sm" data-trx="${t.id}">Отменить</button>`:""}</div>
+    ${ui.sheet==="trx"+t.id?`<div class="sheet"><b>Отменить трансфер?</b><p class="note">Удалю его из TMA и напишу в группу трансферов, что он отменён.</p><div class="bar"><button class="go" data-trxdo="${t.id}">Отменить трансфер</button><button data-act="close">Назад</button></div></div>`:""}`).join("")}
+function transferForm(g){const dir=ui.trdir||"in",d=trDefaults(g,dir);
+  return `<form class="sheet" data-trf="${g.id}"><b>🚗 Трансфер для ${esc(g.guest?.first_name?g.guest.first_name+" "+g.guest.last_name:g.guest_name||"гостя")}</b>
+  <div class="bar" style="gap:6px">${[["in","Встреча (аэропорт → квартира)"],["out","Отвоз (квартира → аэропорт)"],["other","Другой"]].map(([k,n])=>`<button type="button" class="sm ${dir===k?"go":""}" data-trdir="${k}" data-trg="${g.id}">${n}</button>`).join("")}</div>
+  <div class="grid"><label class="f">Дата<input id="tr-d" type="date" value="${d.date||""}" required></label><label class="f">Время<input id="tr-t" type="time" value="${d.time}" required></label>
+  <label class="f">Откуда<input id="tr-from" value="${esc(d.from)}" required></label><label class="f">Куда<input id="tr-to" value="${esc(d.to)}" required></label>
+  <label class="f">Человек<input id="tr-p" type="number" min="1" value="${d.people}"></label><label class="f">Цена, €<input id="tr-pr" type="number" min="0" value="${d.price}"></label></div>
+  <label class="f">Заметка для водителя<input id="tr-n" placeholder="Например: рейс W6 3071, табличка с именем"></label>
+  <p class="note">Стандарт: аэропорт ↔ город 30 € до 4 человек, 50 € больше 4. Трансфер сразу появится в TMA и придёт в группу трансферов.</p>
+  <div class="bar"><button class="go" type="submit">Записать в TMA</button><button type="button" data-act="close">Отмена</button></div></form>`}
+const findBk=id=>allGuests().find(x=>x.id===id)||ui.trg;
+
 // ---------- Гости ----------
 const GUEST_URL="https://ryfexpro.github.io/denari-kv/g.html";
 const GS={none:["📋 не отправлено","var(--mute)"],sent:["📋 ждём данные","var(--amber)"],filled:["📋 заполнено — проверить","var(--violet)"],checked:["📋 проверено","var(--good)"]};
@@ -366,7 +390,9 @@ function guestCard(g){
       ${G.docs?`<button class="sm warn" data-gxdel="${g.id}">Удалить фото документа</button>`:""}</div>
     ${ui.open==="gd"+g.id?(cache.gdocs?.[g.id]?`<div class="gal">${cache.gdocs[g.id].map(u=>`<a href="${u}" target="_blank" rel="noopener"><img src="${u}" alt="документ"></a>`).join("")}</div><div class="note">Ссылки на фото действуют 5 минут. Каждый просмотр записывается в журнал.</div>`:`<div class="note">Загружаю…</div>`):""}
     ${ui.sheet==="gx"+g.id?`<div class="sheet"><b>Удалить фото документа?</b><p class="note">Фото удалятся навсегда. Имя, фамилия и телефон останутся для договора.</p><div class="bar"><button class="go" data-gdodel="${g.id}">Удалить</button><button data-act="close">Отмена</button></div></div>`:""}`:""}
-  ${g.no_show||g.past?"":`<div class="bar"><button class="sm ${G?"":"go"}" data-gsend="${g.id}">${g.guest_status==="none"?"Отправить гостю":"Ссылка гостю"}</button></div>`}
+  ${transferList(g)}
+  ${g.no_show||g.past?"":`<div class="bar"><button class="sm ${G?"":"go"}" data-gsend="${g.id}">${g.guest_status==="none"?"Отправить гостю":"Ссылка гостю"}</button>${canTransfer()?`<button class="sm" data-trnew="${g.id}">+ Трансфер</button>`:""}</div>`}
+  ${ui.sheet==="tr"+g.id?transferForm(g):""}
   ${ui.sheet==="gs"+g.id&&g.guest_token?`<div class="sheet"><label class="f">Язык сообщения<select data-glang="${g.id}">${Object.entries(GL).map(([k,n])=>`<option value="${k}" ${k===lang?"selected":""}>${n}</option>`).join("")}</select></label>
     <pre id="gm${g.id}">${esc(guestMsg(g,lang))}</pre>
     <div class="bar"><button class="go" data-gcopy="${g.id}" data-l="${lang}">Копировать</button>${(G?.phone||g.guest_phone)?`<button data-gwa="${g.id}" data-l="${lang}">WhatsApp</button><button data-gvb="${g.id}" data-l="${lang}">Viber</button>`:""}<button data-act="close">Закрыть</button></div>
@@ -463,6 +489,11 @@ document.addEventListener("click",async e=>{
     else if(d.gvb){await guestShare(+d.gvb,d.l,"vb")}
     else if(d.gdocs){const id=+d.gdocs;ui.open=ui.open==="gd"+id?null:"gd"+id;render();if(ui.open){cache.gdocs=cache.gdocs||{};cache.gdocs[id]=await call("guest_docs",{booking_id:id})}}
     else if(d.gctr){const id=+d.gctr,g=allGuests().find(x=>x.id===id);const r=await call("contract_print",{booking_id:id});const u=`${GUEST_URL}?p=${r.token}&l=${g?.guest?.contract_lang||"ro"}`;if(TG?.openLink)TG.openLink(u);else window.open(u,"_blank");toast("Договор открыт в браузере — там «Скачать / распечатать»");return}
+    else if(d.trnew){const id=+d.trnew;ui.trg=null;ui.trdir="in";ui.sheet=ui.sheet==="tr"+id?null:"tr"+id}
+    else if(d.trday){const id=+d.trday;ui.trg={id,apt:d.apt,address:null,guests:+d.g||2,checkin:ui.date,checkout:shiftDate(ui.date,+d.n||1),guest_name:cache.day.find(x=>x.in?.id===id)?.in?.name};ui.trdir="in";ui.sheet=ui.sheet==="tr"+id?null:"tr"+id}
+    else if(d.trdir){ui.trdir=d.trdir}
+    else if(d.trx){ui.sheet="trx"+d.trx}
+    else if(d.trxdo){await call("transfer_cancel",{id:+d.trxdo});ui.sheet=null;toast("Трансфер отменён, группа TMA предупреждена");await load();if(ui.gq&&ui.tab==="guests"){cache.gsearch=(await call("guest_search",{q:ui.gq})).map(g=>({...g,id:+g.id}));render()}return}
     else if(d.act==="gqclear"){ui.gq="";cache.gsearch=[]}
     else if(d.gchk){await call("guest_check",{booking_id:+d.gchk,ok:true});toast("Отмечено: данные проверены");await load();return}
     else if(d.gunchk){await call("guest_check",{booking_id:+d.gunchk,ok:false});await load();return}
@@ -497,6 +528,8 @@ document.addEventListener("submit",async e=>{
     if(f.id==="exf"){const r=await call("booking_create",{apartment_id:+v("ex-a"),source:v("ex-src"),checkin:v("ex-ci"),checkout:v("ex-co"),checkin_time:v("ex-t")||null,guests:+v("ex-g")||null,price_total:v("ex-p")?+v("ex-p"):null,transfer_eur:v("ex-tr")?+v("ex-tr"):null,name:v("ex-n")||null,phone:v("ex-ph")||null});ui.sheet=null;toast("Бронь сохранена");await load();if(r.note)setTimeout(()=>toast(r.note),2400);return}
     if(f.id==="aif"){const info={notes:{}};f.querySelectorAll("[data-ai]").forEach(i=>info[i.dataset.ai]=i.value);f.querySelectorAll("[data-an]").forEach(i=>info.notes[i.dataset.an]=i.value);
       const id=ui.aid||cache.ainfo[0].id;cache.ainfo=await call("apt_info",{id,info});ui.aid=id;toast("Инструкция сохранена");render();return}
+    if(f.dataset.trf){const id=+f.dataset.trf;await call("transfer_create",{booking_id:id,direction:ui.trdir||"in",date:v("tr-d"),time:v("tr-t"),from:v("tr-from"),to:v("tr-to"),people:v("tr-p"),price:v("tr-pr"),notes:v("tr-n")});
+      ui.sheet=null;ui.trg=null;toast("Трансфер записан в TMA ✓");await load();if(ui.gq&&ui.tab==="guests"){cache.gsearch=(await call("guest_search",{q:ui.gq})).map(g=>({...g,id:+g.id}));render()}return}
     if(f.id==="gsf2"){ui.gq=v("gq").trim();cache.gsearch=ui.gq.length>=2?(await call("guest_search",{q:ui.gq})).map(g=>({...g,id:+g.id})):[];render();return}
     if(f.id==="gsf"){const rules={};f.querySelectorAll("[data-gr]").forEach(i=>rules[i.dataset.gr]=i.value);
       cache.gset=await call("guest_settings",{value:{company:v("gs-co"),contact_phone:v("gs-ph"),checkin_from:v("gs-in"),checkout_until:v("gs-out"),rules}});toast("Настройки сохранены");render();return}
