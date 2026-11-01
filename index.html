@@ -485,10 +485,10 @@ function viewCalApt(){
   const SCC={wait:"var(--mute)",progress:"var(--accent)",review:"var(--violet)",remark:"var(--amber)",ok:"var(--good)"};
   let cells="";
   for(let i=1;i<=n;i++){const d=ui.cm.slice(0,8)+String(i).padStart(2,"0"),b=stay(d),o=outb(d),c=cl(d);
-    const tag=b&&b.checkin===d?"▶ заезд":o&&!b?"◀ выезд":o&&b?"⇄ смена":"";
+    const tag=o&&b?"⇄ смена":b&&b.checkin===d?"▶ заезд":o?"◀ выезд":"";
     cells+=`<div class="prc ${b?(b.source==="extra"?"cex":"bkd"):"fr"} ${ui.cd===d?"sel":""} ${d===td?"tdy":""}" data-cd="${d}"><span class="prd">${i}</span>
       ${c.length?`<span class="cdt" style="background:${SCC[c[0].status]||"var(--mute)"}"></span>`:""}
-      <span class="prp" style="font-size:11px;font-family:inherit">${b?fn(b):""}</span><span class="prs">${tag}</span></div>`}
+      <span class="prp" style="font-size:11px;font-family:inherit;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${b?fn(b):""}</span><span class="prs">${tag}</span></div>`}
   const occ=[...Array(n)].filter((_,i)=>stay(ui.cm.slice(0,8)+String(i+1).padStart(2,"0"))).length;
   let det="";
   if(ui.cd){const d=ui.cd,b=stay(d),o=outb(d),c=cl(d);
