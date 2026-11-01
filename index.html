@@ -84,7 +84,7 @@ table{width:100%;border-collapse:collapse;font-size:14px}th,td{text-align:left;p
 const API="https://zsrddmgiefmuwvcobkin.supabase.co/functions/v1/kv-api";
 const PAY_ACTIONS=new Set(["payroll","payout_mark","staff_rate","apt_rates","apt_rate","apt_grate","calendar"]);
 const TR_ACTIONS=new Set(["transfer_create","transfer_cancel"]);
-const CAL_ACTIONS=new Set(["apt_month","booking_cancel","plan_edit"]);
+const CAL_ACTIONS=new Set(["apt_month","booking_cancel","plan_edit","guest_msg"]);
 const BOT="apartmanager_bot";
 const TG=window.Telegram?.WebApp; TG?.ready(); TG?.expand?.();
 let SLOTS=[["rooms","Комнаты"],["kitchen","Кухня"],["bath","Туалет и ванная"],["wardrobe","Шкафы"],["fridge","Холодильник"],["microwave","Микроволновка"],["linen","Шкаф с доп. бельём"],["key","Ключи в локбоксе"]];
@@ -371,7 +371,11 @@ const GMSG={
   tr:(n,a,d1,d2,u)=>`Merhaba${n?" "+n:""}! Rezervasyonunuz için teşekkürler: ${a}, ${d1} – ${d2}.\nLütfen gelmeden önce online check-in yapın (2 dakika): ${u}\nArdından giriş talimatlarını, varış gününüzde ise kapı kodunu ve Wi-Fi bilgilerini göreceksiniz.`
 };
 const allGuests=()=>[...(cache.guests||[]),...(cache.gsearch||[])];
-function guessLang(ph){const d=String(ph||"").replace(/\D/g,"");const m=[["380","uk"],["373","ro"],["40","ro"],["375","ru"],["7","ru"],["39","it"],["49","de"],["43","de"],["41","de"],["90","tr"]].find(([p])=>d.startsWith(p));return m?m[1]:"ru"}
+function guessLang(ph){const d=String(ph||"").replace(/\D/g,"");const m=[["380","uk"],["373","ro"],["40","ro"],["375","ru"],["7","ru"],["39","it"],["49","de"],["43","de"],["41","de"],["90","tr"]].find(([p])=>d.startsWith(p));return m?m[1]:null}
+// Язык по имени, если Booking не передал язык и нет телефона
+function nameLang(n){n=String(n||"");if(/[іїєґ]/i.test(n))return "uk";if(/[а-яё]/i.test(n))return "ru";if(/[ăâîșşțţ]/i.test(n)||/(escu|eanu)\b/i.test(n))return "ro";if(/[ğı]/i.test(n))return "tr";
+  if(/(enko|chuk|chyk|iuk|yuk|ovych|evych|ska|skyi|skyy|yy\b|Yel|Oleksa|Mykol|Vladysl|Andrii|Serhii|Dmytro|Yuli|Kateryn|Iryna|Olena|Halyn|Nataliia|Yevhen|Bohdan|Taras)/i.test(n))return "uk";
+  if(/(ov|ova|ev|eva|in|ina|sky|skaya)\b/i.test(n)&&/(Alex|Serg|Dmitr|Ivan|Olga|Anna|Elena|Tatiana|Natalia|Yuri|Andrei|Igor|Pavel|Mikhail|Svetlana|Ekaterina)/i.test(n))return "ru";return null}
 function guestMsg(g,lang){const u=`${GUEST_URL}?t=${g.guest_token}&l=${lang}`;const n=String(g.guest_name||"").split(" ")[0];return GMSG[lang](n,g.apt,dm(g.checkin),dm(g.checkout),u)}
 function viewGuests(){
   const list=cache.guests||[], cnt=s=>list.filter(g=>!g.no_show&&g.guest_status===s).length;
@@ -387,7 +391,7 @@ function viewGuests(){
   ${Object.keys(by).sort().map(d=>`<h2 style="margin:6px 0 0;font-size:13px;color:var(--mute);text-transform:uppercase;letter-spacing:.07em">${ru(d)}</h2>${by[d].map(guestCard).join("")}`).join("")}`;
 }
 function guestCard(g){
-  const [sn,sc]=GS[g.guest_status]||GS.none, G=g.guest, lang=ui.glang?.[g.id]||g.guest_lang||guessLang(G?.phone||g.guest_phone);
+  const [sn,sc]=GS[g.guest_status]||GS.none, G=g.guest, lang=ui.glang?.[g.id]||g.guest_lang||guessLang(G?.phone||g.guest_phone)||nameLang(g.guest_name)||"en";
   return `<div class="card" style="--sc:${g.no_show?"var(--line)":sc}">
   <div class="h"><span class="apt">${esc(g.apt)}${bn(g.apt)}</span>${g.no_show?chip("Незаезд","var(--bad)"):chip(sn,sc)}</div>
   <div class="note">${g.past?"<b>прошлый заезд</b> · ":""}${esc(g.guest_name||"гость")} · ${dm(g.checkin)}${g.past?"."+String(g.checkin).slice(0,4):""} → ${dm(g.checkout)} · ${g.guests??"?"} взр · ${g.source==="extra"?"экстра":"Booking"}${g.guest_sent_at?` · ссылка отправлена ${new Date(g.guest_sent_at).toLocaleDateString("ru-RU")}`:""}</div>
@@ -407,8 +411,8 @@ function guestCard(g){
   ${ui.sheet==="tr"+g.id?transferForm(g):""}
   ${ui.sheet==="gs"+g.id&&g.guest_token?`<div class="sheet"><label class="f">Язык сообщения<select data-glang="${g.id}">${Object.entries(GL).map(([k,n])=>`<option value="${k}" ${k===lang?"selected":""}>${n}</option>`).join("")}</select></label>
     <pre id="gm${g.id}">${esc(guestMsg(g,lang))}</pre>
-    <div class="bar"><button class="go" data-gcopy="${g.id}" data-l="${lang}">Копировать</button>${(G?.phone||g.guest_phone)?`<button data-gwa="${g.id}" data-l="${lang}">WhatsApp</button><button data-gvb="${g.id}" data-l="${lang}">Viber</button>`:""}<button data-act="close">Закрыть</button></div>
-    <p class="note">Для гостей Booking: скопируй и вставь в чат с гостем в экстранете Booking. После Beds24 это будет уходить автоматически.</p></div>`:""}
+    <div class="bar">${g.source==="booking"?`<button class="go" data-gbk="${g.id}" data-l="${lang}">📩 Отправить в Booking</button>`:""}<button class="${g.source==="booking"?"":"go"}" data-gcopy="${g.id}" data-l="${lang}">Копировать</button>${(G?.phone||g.guest_phone)?`<button data-gwa="${g.id}" data-l="${lang}">WhatsApp</button><button data-gvb="${g.id}" data-l="${lang}">Viber</button>`:""}<button data-act="close">Закрыть</button></div>
+    ${g.source==="booking"?`<p class="note">«Отправить в Booking» — сообщение сразу уйдёт гостю в чат Booking (и придёт ему на почту). Язык выбран по стране и имени гостя — проверь перед отправкой.</p>`:""}</div>`:""}
   </div>`;
 }
 function aptInfoForm(){
@@ -638,6 +642,8 @@ document.addEventListener("click",async e=>{
     else if(d.gdel){await call("general_delete",{cleaning_id:+d.gdel});toast("Генеральная удалена");await load();return}
     else if(d.gw){ui.gfrom=shiftDate(ui.gfrom,+d.gw);ui.sheet=ui.sheet==="ainfo"||ui.sheet==="gset"?ui.sheet:null;await load();return}
     else if(d.act==="ainfo"||d.act==="gset"){ui.sheet=ui.sheet===d.act?null:d.act;await load();return}
+    else if(d.gbk){const id=+d.gbk,g=allGuests().find(x=>x.id===id);b.disabled=true;
+      try{await call("guest_msg",{booking_id:id,text:guestMsg(g,d.l),lang:d.l});if(g.guest_status==="none")g.guest_status="sent";g.guest_lang=d.l;ui.sheet=null;toast("Отправлено гостю в Booking ✓")}finally{b.disabled=false}}
     else if(d.gsend){const id=+d.gsend,g=allGuests().find(x=>x.id===id);if(!g.guest_token){const r=await call("guest_link",{booking_id:id});g.guest_token=r.token}ui.sheet=ui.sheet==="gs"+id?null:"gs"+id}
     else if(d.gcopy){await guestShare(+d.gcopy,d.l,"copy")}
     else if(d.gwa){await guestShare(+d.gwa,d.l,"wa")}
