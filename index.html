@@ -84,7 +84,7 @@ table{width:100%;border-collapse:collapse;font-size:14px}th,td{text-align:left;p
 const API="https://zsrddmgiefmuwvcobkin.supabase.co/functions/v1/kv-api";
 const PAY_ACTIONS=new Set(["payroll","payout_mark","staff_rate","apt_rates","apt_rate","apt_grate","calendar"]);
 const TR_ACTIONS=new Set(["transfer_create","transfer_cancel"]);
-const CAL_ACTIONS=new Set(["apt_month"]);
+const CAL_ACTIONS=new Set(["apt_month","booking_cancel"]);
 const BOT="apartmanager_bot";
 const TG=window.Telegram?.WebApp; TG?.ready(); TG?.expand?.();
 let SLOTS=[["rooms","Комнаты"],["kitchen","Кухня"],["bath","Туалет и ванная"],["wardrobe","Шкафы"],["fridge","Холодильник"],["microwave","Микроволновка"],["linen","Шкаф с доп. бельём"],["key","Ключи в локбоксе"]];
@@ -204,7 +204,7 @@ function viewDay(){
     <div class="h"><span class="apt">${esc(x.apt)}${bn(x.apt)}</span>${c?chip(sn,sc):""}</div>${(x.out||x.in||c)?legs(x):""}
     ${c?cleanBlock(c):""}
     ${x.general?`${c?'<hr style="border:0;border-top:1px dashed var(--line);width:100%;margin:0">':""}${cleanBlock(x.general)}`:""}
-    ${x.in&&isAdmin()?`<div class="bar">${!x.in.no_show&&ui.date<=today()?`<button class="sm" data-noshow="${x.in.id}">Незаезд</button>`:x.in.no_show?`<button class="sm" data-unnoshow="${x.in.id}">Отменить незаезд</button>`:""}<button class="sm" data-move="${x.in.id}">Переселить</button><button class="sm" data-trday="${x.in.id}" data-apt="${esc(x.apt)}" data-g="${x.in.guests||""}" data-n="${x.in.nights}">+ Трансфер</button></div>`:""}
+    ${x.in&&isAdmin()?`<div class="bar">${!x.in.no_show&&ui.date<=today()?`<button class="sm" data-noshow="${x.in.id}">Незаезд</button>`:x.in.no_show?`<button class="sm" data-unnoshow="${x.in.id}">Отменить незаезд</button>`:""}<button class="sm" data-move="${x.in.id}">Переселить</button>${x.in.source!=="booking"?`<button class="sm warn" data-cxday="${x.in.id}">Отменить бронь</button>`:""}<button class="sm" data-trday="${x.in.id}" data-apt="${esc(x.apt)}" data-g="${x.in.guests||""}" data-n="${x.in.nights}">+ Трансфер</button></div>`:""}
     ${ui.sheet==="tr"+x.in?.id&&ui.trg?.id===x.in.id?transferForm(ui.trg):""}
     ${ui.sheet==="move"+x.in?.id?`<div class="sheet"><label class="f">Переселить в<select id="mv">${cache.apts.filter(a=>a.id!==x.apartment_id).map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join("")}</select></label><p class="note">Проверю, свободна ли квартира на все ночи. Уборки и график пересчитаются.</p><div class="bar"><button class="go" data-domove="${x.in.id}">Переселить</button><button data-act="close">Отмена</button></div></div>`:""}
   </div>`}).join("")}
@@ -512,7 +512,8 @@ function viewCalApt(){
       <span>Данные гостя</span><b>${GST[b.guest_status]||"—"}</b>
       ${b.ext_id&&b.source==="booking"?`<span>№ Booking</span><b>${esc(b.ext_id)}</b>`:""}
       ${(b.transfers||[]).map(t=>`<span>Трансфер</span><b>${dm(t.date)} ${esc(t.time)} · ${esc(t.from)} → ${esc(t.to)}</b>`).join("")}
-      ${b.notes?`<span>Заметка</span><b>${esc(b.notes)}</b>`:""}</div></div>`};
+      ${b.notes?`<span>Заметка</span><b>${esc(b.notes)}</b>`:""}</div>
+      ${isAdmin()&&b.source!=="booking"?(ui.cxl===+b.id?`<div class="remark">Отменить бронь ${esc(nm)} ${dm(b.checkin)}–${dm(b.checkout)}? Даты снова откроются на Booking.</div><div class="bar"><button class="warn" data-cxdo="${b.id}">Да, отменить бронь</button><button class="sm" data-cxno="1">Нет</button></div>`:`<div class="bar"><button class="sm warn" data-cx="${b.id}">Отменить бронь</button></div>`):""}</div>`};
     det=`<h2 class="cdh">${ru(d)}</h2>
     ${o&&o!==b?card(o,"◀ Выезд"):""}${b?card(b,b.checkin===d?"▶ Заезд":"Живёт"):""}
     ${!b?`<div class="card"><div class="h"><span class="apt">Свободно</span></div><div class="note">Ночь с ${dm(d)} на ${dm(shiftDate(d,1))} никем не занята.</div></div>`:""}
@@ -548,6 +549,10 @@ document.addEventListener("click",async e=>{
   try{
     if(d.tab){ui.tab=d.tab;ui.sheet=null;ui.open=null;await load();return}
     if(d.d){ui.date=shiftDate(ui.date,+d.d);ui.sheet=null;ui.open=null;await load();return}
+    if(d.cx){ui.cxl=+d.cx;render();return}
+    if(d.cxno){ui.cxl=null;render();return}
+    if(d.cxday){ui.cxl=+d.cxday;const bk=cache.day.find(x=>x.in?.id==d.cxday);ui.tab="cal";ui.calAll=false;ui.ca=bk?.apartment_id||ui.ca;ui.cm=ui.date.slice(0,8)+"01";ui.cd=ui.date;await load();return}
+    if(d.cxdo){const r=await call("booking_cancel",{booking_id:+d.cxdo});ui.cxl=null;ui.cd=null;toast(r.note||"Бронь отменена");await load();return}
     if(d.cm){ui.cm=shiftMonth(ui.cm,+d.cm);ui.cd=null;await load();return}
     if(d.act==="calall"){ui.calAll=true;await load();return}
     if(d.act==="calone"){ui.calAll=false;await load();return}
