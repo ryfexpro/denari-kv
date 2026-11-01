@@ -38,7 +38,7 @@ button.sm{padding:5px 9px;font-size:13px}
 .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}@media(max-width:560px){.stats{grid-template-columns:repeat(2,1fr)}}
 .st{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:9px 11px}.st b{display:block;font-family:var(--mono);font-size:19px;font-weight:500}.st span{color:var(--mute);font-size:12px}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:10px;border-left:3px solid var(--sc,var(--line))}
-.h{display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap}.apt{font-weight:700;font-size:15.5px}.pgrid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin:8px 0}.pw{font-size:11px;color:var(--mute);text-align:center}.pc{display:flex;flex-direction:column;align-items:center;padding:5px 1px;min-height:54px;border-radius:9px;font-size:11px;line-height:1.25}.pc .dn{font-weight:700;font-size:13px}.pc .pp{font-family:var(--mono)}.pc .pg{font-size:9.5px;color:var(--mute);max-width:100%;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}.pc.cl{opacity:.55;text-decoration:line-through}.pc.bk{box-shadow:inset 0 -3px 0 var(--accent)}.pc.on{outline:2px solid var(--accent);background:color-mix(in srgb,var(--accent) 18%,transparent)}.pc.past{opacity:.3}.chk{font-size:13px;display:inline-flex;gap:3px;align-items:center}.bn{display:block;font-weight:500;font-size:12px;color:var(--mute)}
+.h{display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap}.apt{font-weight:700;font-size:15.5px}.prnav{display:flex;align-items:center;justify-content:space-between;margin:10px 0 4px}.prnav b{font-size:17px}.prleg{display:flex;gap:14px;font-size:12px;color:var(--mute);margin:4px 0}.prleg i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:4px;vertical-align:-1px}.prleg i.fr,.prc.fr{background:var(--panel)}.prleg i.bkd,.prc.bkd{background:color-mix(in srgb,var(--accent) 22%,var(--panel))}.prleg i.cl,.prc.cl{background:repeating-linear-gradient(135deg,var(--line) 0 4px,transparent 4px 8px)}.prgrid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;margin:6px 0 10px}.prw{font-size:11px;color:var(--mute);text-align:center;padding-bottom:2px}.prc{position:relative;border:1px solid var(--line);border-radius:9px;min-height:56px;padding:3px 2px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;overflow:hidden;user-select:none}.prd{position:absolute;top:2px;left:4px;font-size:10px;color:var(--mute)}.prp{font-family:var(--mono);font-weight:700;font-size:13px;margin-top:6px}.prs{font-size:9px;color:var(--mute);max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:11px}.prc.cl .prp{color:var(--mute);text-decoration:line-through}.prc.sel{border:2px solid var(--accent);box-shadow:0 0 0 2px color-mix(in srgb,var(--accent) 35%,transparent)}.prc.past{opacity:.3;cursor:default}.prhint{font-size:13px;color:var(--mute);line-height:1.5;margin:4px 0 8px}.prpanel{position:sticky;bottom:8px;z-index:3}.seg{display:flex;gap:6px;flex-wrap:wrap;margin:4px 0 8px}.chk{font-size:13px;display:inline-flex;gap:3px;align-items:center;border:1px solid var(--line);border-radius:8px;padding:4px 7px}.bn{display:block;font-weight:500;font-size:12px;color:var(--mute)}
 .chip{display:inline-flex;align-items:center;font-size:12px;font-weight:600;padding:2px 9px;border-radius:999px;white-space:nowrap;background:color-mix(in srgb,var(--c) 16%,transparent);color:var(--c)}
 .flow{display:grid;grid-template-columns:1fr 1fr;gap:8px}@media(max-width:480px){.flow{grid-template-columns:1fr}}
 .leg{background:var(--panel2);border-radius:10px;padding:8px 10px;min-width:0}.leg .l{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--dim);font-weight:600}.leg .v{font-weight:600}.leg .m{color:var(--mute);font-size:13px}
@@ -437,26 +437,35 @@ async function loadPrices(){if(!ui.pa)ui.pa=cache.apts?.[0]?.id;if(!ui.pm)ui.pm=
   cache.pr=await call("prices",{apartment_id:ui.pa,from:ui.pm,days:monthDays(ui.pm)})}
 function viewPrices(){
   const r=cache.pr, sel=ui.psel||{}, lo=sel.a&&sel.b?(sel.a<sel.b?sel.a:sel.b):sel.a, hi=sel.a&&sel.b?(sel.a<sel.b?sel.b:sel.a):sel.a;
-  const head=`<h1>Цены</h1><p class="sub">Цены и закрытые даты уходят в Beds24 и через 1–2 минуты появляются на Booking.</p>
+  const head=`<h1>Цены</h1>
   <label class="f">Квартира<select data-psel="1">${(cache.apts||[]).map(a=>`<option value="${a.id}" ${a.id===ui.pa?"selected":""}>${esc(a.name)}${a.booking_name?" — "+esc(a.booking_name):""}</option>`).join("")}</select></label>
-  <div class="dnav"><button class="sm" data-pm="-1">‹</button><b>${MON[+ui.pm.slice(5,7)-1]} ${ui.pm.slice(0,4)}</b><button class="sm" data-pm="1">›</button></div>`;
+  <div class="prnav"><button class="sm" data-pm="-1">‹</button><b>${MON[+ui.pm.slice(5,7)-1]} ${ui.pm.slice(0,4)}</b><button class="sm" data-pm="1">›</button></div>`;
   if(!r) return head+`<div class="empty">Загружаю цены из Beds24…</div>`;
   const first=(new Date(ui.pm+"T12:00").getDay()+6)%7, td=today();
-  const cell=x=>{const inS=lo&&x.d>=lo&&x.d<=(hi||lo);return `<button class="pc ${x.closed?"cl":""} ${x.booked?"bk":""} ${inS?"on":""} ${x.d<td?"past":""}" data-pd="${x.d}" ${x.d<td?"disabled":""}>
-    <span class="dn">${+x.d.slice(8)}</span><span class="pp">${x.closed?"закр.":x.price??"—"}</span>${x.booked?`<span class="pg">${esc(String(x.booked).split(" ")[0])}</span>`:x.min>1?`<span class="pg">мин ${x.min}</span>`:""}</button>`};
-  let form="";
-  if(lo){const n=Math.round((Date.parse(hi||lo)-Date.parse(lo))/864e5)+1;const cur=[...new Set(r.days.filter(x=>x.d>=lo&&x.d<=(hi||lo)).map(x=>x.price))].join(" / ");
-    form=`<form class="sheet" id="prf"><b>${dm(lo)}${hi&&hi!==lo?" – "+dm(hi):""} · ${n} ${n===1?"день":n<5?"дня":"дней"}</b><div class="note">Сейчас: ${cur||"—"} лей</div>
-    <div class="grid"><label class="f">Новая цена, лей<input id="pr-p" type="number" min="200" step="50" placeholder="не менять"></label>
-    <label class="f">Мин. ночей<input id="pr-m" type="number" min="1" max="30" placeholder="не менять"></label></div>
-    <label class="f">Продажа<select id="pr-c"><option value="">не менять</option><option value="open">открыть даты</option><option value="close">закрыть даты</option></select></label>
-    <div class="note">Дни недели:</div><div class="bar">${[1,2,3,4,5,6,0].map(w=>`<label class="chk"><input type="checkbox" class="pr-w" value="${w}" checked> ${["вс","пн","вт","ср","чт","пт","сб"][w]}</label>`).join("")}</div>
-    ${ui.pconf?`<div class="remark">${esc(ui.pconf)}</div><div class="bar"><button class="go" type="submit">Да, отправить на Booking</button><button type="button" data-act="pcancel">Отмена</button></div>`
-      :`<div class="bar"><button class="go" type="button" data-act="pcheck">Дальше</button><button type="button" data-act="pclear">Сбросить выбор</button></div>`}</form>`}
-  return head+`<div class="note">Нажми на первый и последний день периода. Серые — закрыты, синие — заняты.</div>
-  <div class="pgrid">${["пн","вт","ср","чт","пт","сб","вс"].map(x=>`<div class="pw">${x}</div>`).join("")}${'<div></div>'.repeat(first)}${r.days.map(cell).join("")}</div>${form}`;
+  const cell=x=>{const inS=lo&&x.d>=lo&&x.d<=(hi||lo), past=x.d<td;
+    const st=x.closed?"закрыто":x.booked?esc(String(x.booked).split(" ")[0]):x.min>1?"мин "+x.min+" н.":"";
+    return `<div class="prc ${x.closed?"cl":x.booked?"bkd":"fr"} ${inS?"sel":""} ${past?"past":""}" ${past?"":`data-pd="${x.d}"`}>
+      <span class="prd">${+x.d.slice(8)}</span><span class="prp">${x.price??"—"}</span><span class="prs">${st}</span></div>`};
+  let panel;
+  if(!lo) panel=`<div class="prhint">① Нажми на первый день периода, потом на последний.<br>② Внизу появится форма: новая цена, открыть или закрыть даты.</div>
+    <div class="bar"><button class="sm" data-pq="month">Весь месяц</button><button class="sm" data-pq="we">Все пт и сб месяца</button></div>`;
+  else{const n=Math.round((Date.parse(hi||lo)-Date.parse(lo))/864e5)+1;const days=r.days.filter(x=>x.d>=lo&&x.d<=(hi||lo));const cur=[...new Set(days.map(x=>x.price))].filter(x=>x!=null);const bkd=days.filter(x=>x.booked).length;
+    const wdAll=!ui.pwd||ui.pwd.length===7;
+    panel=`<form class="sheet prpanel" id="prf"><div class="h"><b>${dm(lo)}${hi&&hi!==lo?" – "+dm(hi):""} · ${n} ${n===1?"день":n<5?"дня":"дней"}</b><button type="button" class="sm" data-act="pclear">✕ Сбросить</button></div>
+    <div class="note">Сейчас: ${cur.length?cur.join(" / ")+" лей":"—"}${bkd?` · занято ${bkd} дн. (брони не изменятся)`:""}</div>
+    ${!wdAll?`<div class="note">Только дни: <b>${[1,2,3,4,5,6,0].filter(w=>ui.pwd.includes(w)).map(w=>["вс","пн","вт","ср","чт","пт","сб"][w]).join(", ")}</b></div>`:""}
+    <label class="f">Новая цена за ночь, лей<input id="pr-p" type="number" inputmode="numeric" min="200" step="50" placeholder="оставить как есть"></label>
+    <div class="note">Продажа на Booking</div>
+    <div class="seg">${[["","не менять"],["open","🟢 открыть"],["close","⛔ закрыть"]].map(([v,t])=>`<button type="button" class="${(ui.pc||"")===v?"on":""}" data-pcv="${v}">${t}</button>`).join("")}</div>
+    <details ${ui.pmore?"open":""}><summary class="note">Ещё: мин. ночей, дни недели</summary>
+      <label class="f">Минимум ночей<input id="pr-m" type="number" min="1" max="30" placeholder="оставить как есть"></label>
+      <div class="note">Применить только к дням:</div><div class="seg">${[1,2,3,4,5,6,0].map(w=>`<label class="chk"><input type="checkbox" class="pr-w" value="${w}" ${!ui.pwd||ui.pwd.includes(w)?"checked":""}>${["вс","пн","вт","ср","чт","пт","сб"][w]}</label>`).join("")}</div></details>
+    ${ui.pconf?`<div class="remark">${esc(ui.pconf)}</div><div class="bar"><button class="go" type="submit">✓ Да, отправить на Booking</button><button type="button" data-act="pcancel">Изменить</button></div>`
+      :`<div class="bar"><button class="go" type="button" data-act="pcheck">Сохранить</button></div>`}</form>`}
+  return head+`<div class="prleg"><span><i class="fr"></i>свободно</span><span><i class="bkd"></i>занято</span><span><i class="cl"></i>закрыто</span></div>
+  <div class="prgrid">${["пн","вт","ср","чт","пт","сб","вс"].map(x=>`<div class="prw">${x}</div>`).join("")}${'<div></div>'.repeat(first)}${r.days.map(cell).join("")}</div>${panel}`;
 }
-function prForm(){const p=document.getElementById("pr-p")?.value,m=document.getElementById("pr-m")?.value,c=document.getElementById("pr-c")?.value;
+function prForm(){const p=document.getElementById("pr-p")?.value,m=document.getElementById("pr-m")?.value,c=ui.pc||"";
   const wd=[...document.querySelectorAll(".pr-w:checked")].map(x=>+x.value);return {p,m,c,wd}}
 
 function render(){
@@ -477,21 +486,23 @@ async function upload(url,blob){
 }
 
 document.addEventListener("click",async e=>{
+  const pdv=e.target.closest("[data-pd]");if(pdv){const d0=pdv.dataset.pd,s0=ui.psel||{};ui.pconf=null;ui.psel=!s0.a||s0.b?{a:d0}:{a:s0.a,b:d0};if(!s0.a||s0.b){ui.pc="";ui.pwd=null}render();if(ui.psel.b)document.getElementById("prf")?.scrollIntoView({behavior:"smooth",block:"end"});return}
   const g=e.target.closest("[data-goday]");if(g){ui.date=g.dataset.goday;ui.tab="day";ui.sheet=null;ui.bk=null;await load();return}
   const b=e.target.closest("button");if(!b)return;const d=b.dataset;
   try{
     if(d.tab){ui.tab=d.tab;ui.sheet=null;ui.open=null;await load();return}
     if(d.d){ui.date=shiftDate(ui.date,+d.d);ui.sheet=null;ui.open=null;await load();return}
     if(d.pm){ui.pm=shiftMonth(ui.pm,+d.pm);ui.psel=null;ui.pconf=null;await load();return}
-    if(d.pd){const s=ui.psel||{};ui.pconf=null;ui.psel=!s.a||s.b?{a:d.pd}:{a:s.a,b:d.pd};render();return}
-    if(d.act==="pclear"){ui.psel=null;ui.pconf=null;render();return}
+    if(d.pq){const days=cache.pr.days.filter(x=>x.d>=today());if(!days.length)return;ui.psel={a:days[0].d,b:days[days.length-1].d};ui.pwd=d.pq==="we"?[5,6]:null;ui.pc="";ui.pconf=null;render();document.getElementById("prf")?.scrollIntoView({behavior:"smooth",block:"end"});return}
+    if(d.pcv!==undefined){const keep=prForm();ui.pc=d.pcv;ui.pconf=null;render();const pp=document.getElementById("pr-p");if(pp)pp.value=keep.p||"";const pm=document.getElementById("pr-m");if(pm)pm.value=keep.m||"";return}
+    if(d.act==="pclear"){ui.psel=null;ui.pconf=null;ui.pwd=null;ui.pc="";render();return}
     if(d.act==="pcancel"){ui.pconf=null;render();return}
     if(d.act==="pcheck"){const f=prForm(),s=ui.psel,lo=s.b&&s.b<s.a?s.b:s.a,hi=s.b?(s.b<s.a?s.a:s.b):s.a;ui.pform=f;
       if(!f.p&&!f.m&&!f.c){toast("Укажи цену, мин. ночей или открыть/закрыть",1);return}if(!f.wd.length){toast("Выбери хотя бы один день недели",1);return}
       const a=cache.apts.find(a=>a.id===ui.pa),wd=f.wd.length<7?" ("+[1,2,3,4,5,6,0].filter(w=>f.wd.includes(w)).map(w=>["вс","пн","вт","ср","чт","пт","сб"][w]).join(", ")+")":"";
       const bkd=cache.pr.days.filter(x=>x.d>=lo&&x.d<=hi&&x.booked).length;
-      ui.pconf=`${a.name}${a.booking_name?" ("+a.booking_name+")":""}, ${dm(lo)}${hi!==lo?"–"+dm(hi):""}${wd}: ${[f.p&&"цена "+f.p+" лей",f.m&&"мин. ночей "+f.m,f.c==="close"&&"закрыть",f.c==="open"&&"открыть"].filter(Boolean).join(", ")}.${bkd?` В периоде ${bkd} дн. уже заняты — брони не изменятся.`:""} Отправить?`;render();
-      const fe=document.getElementById("prf");if(fe){document.getElementById("pr-p").value=f.p||"";document.getElementById("pr-m").value=f.m||"";document.getElementById("pr-c").value=f.c||"";fe.querySelectorAll(".pr-w").forEach(x=>x.checked=f.wd.includes(+x.value))}return}
+      ui.pwd=f.wd;ui.pmore=!!document.querySelector("#prf details[open]");ui.pconf=`${a.name}${a.booking_name?" ("+a.booking_name+")":""}, ${dm(lo)}${hi!==lo?"–"+dm(hi):""}${wd}: ${[f.p&&"цена "+f.p+" лей",f.m&&"мин. ночей "+f.m,f.c==="close"&&"закрыть",f.c==="open"&&"открыть"].filter(Boolean).join(", ")}.${bkd?` В периоде ${bkd} дн. уже заняты — брони не изменятся.`:""} Отправить?`;render();
+      const fe=document.getElementById("prf");if(fe){document.getElementById("pr-p").value=f.p||"";document.getElementById("pr-m").value=f.m||"";fe.scrollIntoView({behavior:"smooth",block:"end"})}return}
     if(d.act==="extra"){ui.sheet=ui.sheet==="extra"?null:"extra"}
     else if(d.act==="viber"){ui.sheet=ui.sheet==="viber"?null:"viber"}
     else if(d.act==="close"){ui.sheet=null}
@@ -571,7 +582,7 @@ document.addEventListener("submit",async e=>{
     if(f.id==="exf"){const r=await call("booking_create",{apartment_id:+v("ex-a"),source:v("ex-src"),checkin:v("ex-ci"),checkout:v("ex-co"),checkin_time:v("ex-t")||null,guests:+v("ex-g")||null,price_total:v("ex-p")?+v("ex-p"):null,transfer_eur:v("ex-tr")?+v("ex-tr"):null,name:v("ex-n")||null,phone:v("ex-ph")||null});ui.sheet=null;toast("Бронь сохранена");await load();if(r.note)setTimeout(()=>toast(r.note),2400);return}
     if(f.id==="prf"){const f2=ui.pform,s=ui.psel,lo=s.b&&s.b<s.a?s.b:s.a,hi=s.b?(s.b<s.a?s.a:s.b):s.a;
       const r=await call("price_set",{apartment_id:ui.pa,from:lo,to:hi,price:f2.p||null,min_stay:f2.m||null,closed:f2.c==="close"?true:f2.c==="open"?false:null,wd:f2.wd.length<7?f2.wd:[]});
-      ui.psel=null;ui.pconf=null;toast(`Отправлено в Beds24: ${r.days} дн. На Booking — через 1–2 мин.`);await load();return}
+      ui.psel=null;ui.pconf=null;ui.pwd=null;ui.pc="";toast(`Отправлено в Beds24: ${r.days} дн. На Booking — через 1–2 мин.`);await load();return}
     if(f.id==="aif"){const info={notes:{}};f.querySelectorAll("[data-ai]").forEach(i=>info[i.dataset.ai]=i.value);f.querySelectorAll("[data-an]").forEach(i=>info.notes[i.dataset.an]=i.value);
       const id=ui.aid||cache.ainfo[0].id;cache.ainfo=await call("apt_info",{id,info});ui.aid=id;toast("Инструкция сохранена");render();return}
     if(f.dataset.trf){const id=+f.dataset.trf;await call("transfer_create",{booking_id:id,direction:ui.trdir||"in",date:v("tr-d"),time:v("tr-t"),from:v("tr-from"),to:v("tr-to"),people:v("tr-p"),price:v("tr-pr"),notes:v("tr-n")});
