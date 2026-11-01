@@ -74,7 +74,7 @@ table{width:100%;border-collapse:collapse;font-size:14px}th,td{text-align:left;p
 <body>
 <div class="wrap">
 <header>
-  <div class="top"><div class="logo"><i>D</i>Квартиры Denari</div><div class="sp"></div><div class="who" id="who"></div></div>
+  <div class="top"><div class="logo"><i>D</i>Квартиры Denari</div><div class="sp"></div><div class="who" id="who"></div><button class="sm" id="homebtn" style="display:none;margin-left:6px" title="Добавить на экран телефона">📲</button></div>
   <nav id="tabs"></nav>
 </header>
 <main id="view"><div class="empty">Загрузка…</div></main>
@@ -99,8 +99,15 @@ const shiftDate=(s,n)=>{const d=new Date(s+"T12:00:00");d.setDate(d.getDate()+n)
 const ru=s=>{const d=new Date(s+"T12:00:00");return d.toLocaleDateString("ru-RU",{weekday:"short",day:"numeric",month:"long"})};
 const dm=s=>s?s.slice(8,10)+"."+s.slice(5,7):"";
 function toast(m,err){const t=document.getElementById("toast");t.textContent=m;t.className="toast on"+(err?" err":"");clearTimeout(toast.h);toast.h=setTimeout(()=>t.className="toast",err?3500:2200);try{TG?.HapticFeedback?.notificationOccurred(err?"error":"success")}catch(e){}}
+// Чтение — с таймаутом и повтором (первый запрос после паузы иногда теряется в сети Telegram). Запись — без повтора, чтобы не задвоить.
+const READ=new Set(["me","apartments","staff","day","calendar","apt_month","prices","guests","guest_search","repairs","payroll","money","photos","guest_settings","apt_info","apt_rates"]);
 async function call(action,body={}){
-  const r=await fetch(CAL_ACTIONS.has(action)?API.replace("kv-api","kv-cal"):PAY_ACTIONS.has(action)?API.replace("kv-api","kv-pay"):TR_ACTIONS.has(action)?API.replace("kv-api","kv-transfer"):API,{method:"POST",headers:{"content-type":"application/json","x-tg-init":TG?.initData||""},body:JSON.stringify({action,...body})});
+  const url=CAL_ACTIONS.has(action)?API.replace("kv-api","kv-cal"):PAY_ACTIONS.has(action)?API.replace("kv-api","kv-pay"):TR_ACTIONS.has(action)?API.replace("kv-api","kv-transfer"):API;
+  const tries=READ.has(action)?3:1;let r,last;
+  for(let i=0;i<tries;i++){const ac=new AbortController(),tm=setTimeout(()=>ac.abort(),READ.has(action)?7000:25000);
+    try{r=await fetch(url,{method:"POST",headers:{"content-type":"application/json","x-tg-init":TG?.initData||""},body:JSON.stringify({action,...body}),signal:ac.signal});clearTimeout(tm);break}
+    catch(e){clearTimeout(tm);last=e;r=null;if(i<tries-1)await new Promise(x=>setTimeout(x,400))}}
+  if(!r){const e=new Error(last?.name==="AbortError"?"Сервер не ответил — проверь интернет и попробуй ещё раз":"Нет связи с сервером");e.status=0;throw e}
   const j=await r.json().catch(()=>({error:"Нет связи с сервером"}));
   if(!r.ok||j.error){const e=new Error(j.error||"Ошибка");e.payload=j;e.status=r.status;throw e}
   return j.data??j;
@@ -122,6 +129,7 @@ async function boot(){
   }
   if(Array.isArray(me.slots)&&me.slots.length) SLOTS=me.slots.map(x=>[x.k,x.n]);
   document.getElementById("who").textContent=me.name+" · "+({owner:"владелец",admin:"админ",dispatcher:"помощник",cleaner:"пчёлка",master:"мастер",manager:"менеджер"}[me.role]||me.role);
+  try{if(TG?.addToHomeScreen&&TG.isVersionAtLeast?.("8.0")){const hb=document.getElementById("homebtn");TG.checkHomeScreenStatus?.(st=>{if(st!=="added"&&st!=="unsupported")hb.style.display=""});hb.onclick=()=>TG.addToHomeScreen()}}catch(_){}
   ui.tab=me.role==="master"?"rep":"day";
   if(canDispatch()){[cache.staff,cache.apts]=await Promise.all([call("staff"),call("apartments")])} else {cache.apts=await call("apartments").catch(()=>[])}
   await load();
