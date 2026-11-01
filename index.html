@@ -198,7 +198,7 @@ function viewDay(){
   <div class="stats"><div class="st"><b>${n("wait")+n("progress")}</b><span>уборок осталось</span></div><div class="st"><b style="color:var(--violet)">${n("review")}</b><span>ждут проверки</span></div><div class="st"><b style="color:var(--amber)">${n("remark")}</b><span>замечания</span></div><div class="st"><b style="color:var(--good)">${n("ok")}</b><span>принято</span></div></div>
   <div class="bar">${isAdmin()?`<button class="go" data-act="extra">+ Бронь</button>`:""}<button data-act="general">+ Генеральная</button><button data-act="viber">Текст для Viber</button></div>
   ${ui.sheet==="extra"?extraForm():""}${ui.sheet==="general"?generalForm():""}
-  ${ui.sheet==="viber"?`<div class="sheet"><b>График на ${dm(ui.date)}</b><pre id="vtxt">${esc(viberText())}</pre><div class="bar"><button class="go" data-act="copy">Копировать</button><button data-act="close">Закрыть</button></div></div>`:""}
+  ${ui.sheet==="viber"?`<div class="sheet"><b>График на ${dm(ui.date)}</b><pre id="vtxt">${esc(viberText())}</pre><div class="bar"><button class="go" data-act="vsend">Отправить в Viber</button><button data-act="tsend">В Telegram</button><button data-act="copy">Копировать</button><button data-act="close">Закрыть</button></div></div>`:""}
   ${!rows.length?`<div class="empty">На эту дату броней нет.<br><span class="note">Брони придут из Booking после подключения Beds24, или добавь вручную кнопкой «+ Бронь».</span></div>`:""}
   ${rows.filter(x=>x.cleaning||x.in||x.general).map(x=>{const c=x.cleaning;const [sn,sc]=c?SS[c.status]:x.general?SS[x.general.status]:["","var(--line)"];return `<div class="card" style="--sc:${sc}">
     <div class="h"><span class="apt">${esc(x.apt)}${bn(x.apt)}</span>${c?chip(sn,sc):""}</div>${(x.out||x.in||c)?legs(x):""}
@@ -567,6 +567,8 @@ document.addEventListener("click",async e=>{
     if(d.act==="extra"){ui.sheet=ui.sheet==="extra"?null:"extra"}
     else if(d.act==="viber"){ui.sheet=ui.sheet==="viber"?null:"viber"}
     else if(d.act==="close"){ui.sheet=null}
+    else if(d.act==="vsend"||d.act==="tsend"){const t=viberText();const u=d.act==="vsend"?`viber://forward?text=${encodeURIComponent(t)}`:`https://t.me/share/url?url=${encodeURIComponent("📅")}&text=${encodeURIComponent(t)}`;
+      if(d.act==="tsend"&&TG?.openTelegramLink)TG.openTelegramLink(u);else if(TG?.openLink)TG.openLink(u);else window.open(u,"_blank");return}
     else if(d.act==="copy"){const t=viberText();try{await navigator.clipboard.writeText(t);toast("Скопировано — вставь в Viber")}catch(_){const r=document.createRange();r.selectNodeContents(document.getElementById("vtxt"));getSelection().removeAllRanges();getSelection().addRange(r);toast("Текст выделен — скопируй")}return}
     else if(d.gal){const id=+d.gal;ui.open=ui.open==="gal"+id?null:"gal"+id;render();if(ui.open){cache.gal[id]=await call("photos",{cleaning_id:id})}}
     else if(d.ok){await call("review",{cleaning_id:+d.ok,ok:true});toast("Принято");await load();return}
