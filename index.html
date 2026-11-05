@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ru">
+<html lang="ru" data-theme="light">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
@@ -14,6 +14,15 @@
   --display:"Unbounded","Onest",system-ui,sans-serif; --body:"Onest",system-ui,-apple-system,"Segoe UI",sans-serif; --mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
   color-scheme:dark;
 }
+/* Светлая тема (по умолчанию). Тёмная — кнопкой 🌙 в шапке, запоминается на телефоне. */
+:root[data-theme="light"]{
+  --bg:#f3f5fb; --panel:#ffffff; --panel2:#f2f4fa; --line:#e2e6f0; --fg:#151a26; --mute:#646d80; --dim:#9aa2b4;
+  --accent:#4a63f5; --amber:#b86e00; --good:#16924a; --bad:#de3b3b; --violet:#6f52e8; --pink:#d9466f;
+  color-scheme:light;
+}
+:root[data-theme="light"] body{background:linear-gradient(180deg,#e9ecfb 0,#f3f5fb 260px) no-repeat,var(--bg)}
+:root[data-theme="light"] .card,:root[data-theme="light"] .st,:root[data-theme="light"] .sheet,:root[data-theme="light"] .cal{box-shadow:0 1px 2px rgba(20,26,50,.04),0 4px 14px rgba(20,26,50,.05)}
+:root[data-theme="light"] .bk.ns{color:var(--mute)}
 *{box-sizing:border-box}
 html,body{margin:0;background:var(--bg);color:var(--fg)}
 body{font-family:var(--body);font-size:15px;line-height:1.45;padding:0 max(14px,env(safe-area-inset-right,0px)) 80px max(14px,env(safe-area-inset-left,0px))}
@@ -74,7 +83,7 @@ table{width:100%;border-collapse:collapse;font-size:14px}th,td{text-align:left;p
 <body>
 <div class="wrap">
 <header>
-  <div class="top"><div class="logo"><i>D</i>Квартиры Denari</div><div class="sp"></div><div class="who" id="who"></div><button class="sm" id="homebtn" style="display:none;margin-left:6px" title="Добавить на экран телефона">📲</button></div>
+  <div class="top"><div class="logo"><i>D</i>Квартиры Denari</div><div class="sp"></div><div class="who" id="who"></div><button class="sm" id="themebtn" style="margin-left:6px" title="Светлая / тёмная тема">🌙</button><button class="sm" id="homebtn" style="display:none;margin-left:6px" title="Добавить на экран телефона">📲</button></div>
   <nav id="tabs"></nav>
 </header>
 <main id="view"><div class="empty">Загрузка…</div></main>
@@ -87,6 +96,11 @@ const TR_ACTIONS=new Set(["transfer_create","transfer_cancel"]);
 const CAL_ACTIONS=new Set(["apt_month","booking_cancel","plan_edit","guest_msg"]);
 const BOT="apartmanager_bot";
 const TG=window.Telegram?.WebApp; TG?.ready(); TG?.expand?.();
+function setTheme(t){document.documentElement.dataset.theme=t;try{localStorage.setItem("kv_theme",t)}catch(_){}
+  const b=document.getElementById("themebtn");if(b)b.textContent=t==="light"?"🌙":"☀️";
+  const c=t==="light"?"#f3f5fb":"#05070b";try{TG?.setHeaderColor?.(c);TG?.setBackgroundColor?.(c);TG?.setBottomBarColor?.(c)}catch(_){}}
+let THEME="light";try{THEME=localStorage.getItem("kv_theme")||"light"}catch(_){}
+setTheme(THEME);document.getElementById("themebtn").onclick=()=>setTheme(document.documentElement.dataset.theme==="light"?"dark":"light");
 let SLOTS=[["rooms","Комнаты"],["kitchen","Кухня"],["bath","Туалет и ванная"],["wardrobe","Шкафы"],["fridge","Холодильник"],["microwave","Микроволновка"],["linen","Шкаф с доп. бельём"],["key","Ключи в локбоксе"]];
 const slotName=k=>(SLOTS.find(x=>x[0]===k)||[k,{bath:"Ванная",beds:"Кровати",repair:"Ремонт"}[k]||k])[1];
 const SS={wait:["Ждёт уборки","var(--mute)"],progress:["Убирает","var(--accent)"],review:["На проверке","var(--violet)"],remark:["Замечание","var(--amber)"],ok:["Принято","var(--good)"]};
