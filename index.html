@@ -94,6 +94,7 @@ table{width:100%;border-collapse:collapse;font-size:14px}th,td{text-align:left;p
 const API="https://zsrddmgiefmuwvcobkin.supabase.co/functions/v1/kv-api";
 const PAY_ACTIONS=new Set(["payroll","payout_mark","staff_rate","staff_wrate","apt_rates","apt_rate","apt_grate","calendar"]);
 const TR_ACTIONS=new Set(["transfer_create","transfer_cancel"]);
+const PLAN_ACTIONS=new Set(["clean_done"]);
 const MONEY_ACTIONS=new Set(["cash_box","cash_handover","money_month"]);
 const CAL_ACTIONS=new Set(["apt_month","booking_cancel","plan_edit","guest_msg"]);
 const BOT="apartmanager_bot";
@@ -118,7 +119,7 @@ function toast(m,err){const t=document.getElementById("toast");t.textContent=m;t
 // Чтение — с таймаутом и повтором (первый запрос после паузы иногда теряется в сети Telegram). Запись — без повтора, чтобы не задвоить.
 const READ=new Set(["me","apartments","staff","day","calendar","apt_month","prices","guests","guest_search","repairs","payroll","money","cash_box","money_month","photos","guest_settings","apt_info","apt_rates"]);
 async function call(action,body={}){
-  const url=MONEY_ACTIONS.has(action)?API.replace("kv-api","kv-money"):CAL_ACTIONS.has(action)?API.replace("kv-api","kv-cal"):PAY_ACTIONS.has(action)?API.replace("kv-api","kv-pay"):TR_ACTIONS.has(action)?API.replace("kv-api","kv-transfer"):API;
+  const url=PLAN_ACTIONS.has(action)?API.replace("kv-api","kv-plan"):MONEY_ACTIONS.has(action)?API.replace("kv-api","kv-money"):CAL_ACTIONS.has(action)?API.replace("kv-api","kv-cal"):PAY_ACTIONS.has(action)?API.replace("kv-api","kv-pay"):TR_ACTIONS.has(action)?API.replace("kv-api","kv-transfer"):API;
   const tries=READ.has(action)?3:1;let r,last;
   for(let i=0;i<tries;i++){const ac=new AbortController(),tm=setTimeout(()=>ac.abort(),READ.has(action)?7000:25000);
     try{r=await fetch(url,{method:"POST",headers:{"content-type":"application/json","x-tg-init":TG?.initData||""},body:JSON.stringify({action,...body}),signal:ac.signal});clearTimeout(tm);break}
@@ -139,6 +140,7 @@ async function boot(){
   try{
     if(code){try{const r=await call("bind",{code});toast("Добро пожаловать, "+r.staff.name)}catch(e){if(e.status!==404)throw e}}
     me=await call("me");
+    if(me.role==="dispatcher"&&ui.tab==="day"){ui.tab="plan";ui.date=new Date().getHours()<16?today():today(1)}
   }catch(e){
     if(e.payload?.error==="not_registered"){v.innerHTML=`<div class="empty">Вы ещё не в команде.<br>Попросите админа прислать ссылку-приглашение.<br><br><span class="note">Ваш Telegram ID: ${e.payload.tg_id}</span></div>`;return}
     v.innerHTML=`<div class="empty">${esc(e.message)}</div>`;return;
@@ -168,7 +170,7 @@ async function load(){
   render();
 }
 function tabs(){
-  const t=me.role==="cleaner"?[["day","Мои уборки"],["rep","Ремонт"]]:me.role==="master"?[["rep","Ремонт"]]:me.role==="dispatcher"?[["day","График"],["plan","План"],["cal","Календарь"],["sal","Пчёлки"],["rep","Ремонт"]]:me.role==="manager"?[["day","График"],["cal","Календарь"],["pay","Оплаты"]]:
+  const t=me.role==="cleaner"?[["day","Мои уборки"],["rep","Ремонт"]]:me.role==="master"?[["rep","Ремонт"]]:me.role==="dispatcher"?[["plan","План"],["day","График"],["cal","Календарь"],["sal","Пчёлки"],["rep","Ремонт"]]:me.role==="manager"?[["day","График"],["cal","Календарь"],["pay","Оплаты"]]:
     [["day","График"],["plan","План"],["cal","Календарь"],["price","Цены"],["guests","Гости"],["pay","Оплаты"],["sal","Зарплаты"],["rep","Ремонт"],["team","Команда"]].concat([["money","Деньги"]]);
   return t.map(([k,n])=>`<button class="${ui.tab===k?"on":""}" data-tab="${k}">${n}</button>`).join("");
 }
@@ -245,6 +247,11 @@ function viberText(){
   for(const x of r.filter(x=>x.cleaning||x.in)) t+=`👉 ${x.apt}\nВыезд: ${x.out?(x.out.name||"")+(x.out.time?" в "+x.out.time:""):""}\nЗаезд: ${x.in?`${x.in.name||""} ${x.in.guests??""} взр на ${x.in.nights} ${x.in.nights>1?"ночи":"ночь"}${x.in.time?" в "+x.in.time:""}`:"Уборка на "+(x.cleaning?.prep??"")}${x.cleaning?.cleaner?`\nУбирает: ${x.cleaning.cleaner}`:""}\n\n`;
   for(const x of r.filter(x=>x.general)) t+=`🧽 ${x.apt}\nГенеральная уборка${x.general.note?": "+x.general.note:""}${x.general.cleaner?`\nУбирает: ${x.general.cleaner}`:""}\n\n`;
   for(const x of r.filter(x=>!x.cleaning&&!x.in&&!x.general&&x.stay_until)) t+=`👉 ${x.apt}\nПродолжают проживать до ${dm(x.stay_until)}\n\n`;
+  // Кто где — сводка по пчёлкам
+  const who={};for(const x of r)for(const c of [x.cleaning,x.general])if(c)for(const p of c.cleaners||[])(who[p.name]=who[p.name]||[]).push(x.apt+(c.kind==="general"?" (генеральная)":c.due?" к "+c.due:""));
+  const free=r.filter(x=>x.cleaning&&!(x.cleaning.cleaners||[]).length).map(x=>x.apt);
+  if(Object.keys(who).length){t+=`🐝 Кто где:\n`;for(const [n,l] of Object.entries(who))t+=`${n}: ${l.join(", ")}\n`;}
+  if(free.length)t+=`❗ Без пчёлки: ${free.join(", ")}\n`;
   return t.trim();
 }
 
@@ -567,18 +574,22 @@ function viewCalApt(){
 }
 
 // ---------- План на день (по умолчанию завтра): все выезды и заезды, кто убирает, правка ----------
+// «Убрано»: Катя отмечает по сообщению пчёлки в Viber (без фото)
+function doneBtn(c){if(!c||c.skip)return "";const ok=c.status==="ok"||c.status==="review",has=(c.cleaners||[]).length;
+  return ok?`<div class="bar">${chip("✅ Убрано"+(c.cleaner?" · "+c.cleaner:""),"var(--good)")}<button class="sm" data-cdone="${c.id}" data-undo="1">Отменить</button></div>`
+    :has?`<div class="bar"><button class="go" data-cdone="${c.id}">✅ Квартира убрана</button></div>`:"";}
 function viewPlan(){
   const rows=cache.day||[], vis=rows.filter(x=>x.cleaning||x.in||x.out||x.general), stay=rows.filter(x=>!x.cleaning&&!x.general&&!x.in&&!x.out&&x.stay_until);
   const cl=rows.flatMap(x=>[x.cleaning,x.general]).filter(c=>c&&!c.skip), done=cl.filter(c=>(c.cleaners||[]).length).length;
   const bees=(cache.staff||[]).filter(s=>s.role==="cleaner"&&s.active);
   const card=x=>{const c=x.cleaning,i=x.in,o=x.out,ed=ui.sheet==="pe"+x.apartment_id;
-    return `<div class="card" style="--sc:${c&&!c.skip?((c.cleaners||[]).length?"var(--good)":"var(--amber)"):"var(--line)"}">
+    return `<div class="card" style="--sc:${c&&!c.skip?(c.status==="ok"||c.status==="review"?"var(--good)":(c.cleaners||[]).length?"var(--accent)":"var(--amber)"):"var(--line)"}">
     <div class="h"><span class="apt">${esc(x.apt)}${bn(x.apt)}</span><button class="sm" data-pe="${x.apartment_id}">${ed?"Закрыть":"✏️ Изменить"}</button></div>
     <div class="kv"><span>◀ Выезд</span><b>${o?esc(o.name||"гость")+(o.time?" · до "+esc(o.time):""):"—"}</b>
     <span>▶ Заезд</span><b>${i?`${esc(i.name||"гость")} · ${i.guests??"?"} чел.${i.time?" · "+esc(i.time):""}${i.no_show?" · ❌ незаезд":""}`:"—"}</b>
     ${c?`<span>🧹 Уборка</span><b>${c.skip?"не нужна":`на ${c.prep??"?"} чел.${c.due?" к "+esc(c.due):""}`}${c.note?" · "+esc(c.note):""}</b>`:""}</div>
-    ${c&&!c.skip?beeChips(c):""}
-    ${x.general?`<div class="note">🧽 Генеральная${x.general.note?": "+esc(x.general.note):""}</div>${beeChips(x.general)}`:""}
+    ${c&&!c.skip?beeChips(c)+doneBtn(c):""}
+    ${x.general?`<div class="note">🧽 Генеральная${x.general.note?": "+esc(x.general.note):""}</div>${beeChips(x.general)}${doneBtn(x.general)}`:""}
     ${ed?`<form class="sheet" data-pef="${x.apartment_id}"><div class="grid">
       ${i?`<label class="f">Время заезда<input id="pe-t" value="${esc(i.time||"")}" placeholder="14:00"></label>`:""}
       ${c?`<label class="f">Подготовить на, чел.<input id="pe-g" type="number" min="1" max="20" value="${c.prep??""}"></label><label class="f">Готово к<input id="pe-d" value="${esc(c.due||"")}" placeholder="14:00"></label>`:""}</div>
@@ -587,7 +598,9 @@ function viewPlan(){
       ${c?`<label class="chk"><input type="checkbox" id="pe-sk" ${c.skip?"checked":""}> Уборка не нужна (пчёлке придёт отмена)</label>`:""}
       <div class="bar"><button class="go" type="submit">Сохранить</button><button type="button" data-act="close">Отмена</button></div></form>`:""}
   </div>`};
+  const cleaned=cl.filter(c=>c.status==="ok"||c.status==="review").length;
   return `${dateNav()}<h1>План на ${ru(ui.date)}</h1>
+  <p class="note">Выезды и заезды подтягиваются сами из Booking и прямых броней. <b>Ира</b> проверяет и правит (✏️) · <b>Катя</b> выбирает пчёлок и жмёт «Отправить в Viber» · по ходу дня Катя отмечает «✅ Квартира убрана». ${cl.length?`Убрано: <b>${cleaned}/${cl.length}</b>.`:""}</p>
   <div class="stats"><div class="st"><b>${rows.filter(x=>x.out).length}</b><span>выездов</span></div><div class="st"><b>${rows.filter(x=>x.in).length}</b><span>заездов</span></div><div class="st"><b>${cl.length}</b><span>уборок</span></div><div class="st"><b style="color:${done===cl.length?"var(--good)":"var(--amber)"}">${done}/${cl.length}</b><span>назначено</span></div></div>
   ${bees.length&&cl.length>done?`<div class="sheet"><b>Быстро: одна пчёлка на все неназначенные</b><div class="bar"><select id="pb">${bees.map(b=>`<option value="${b.id}">${esc(b.name)}</option>`).join("")}</select><button class="go" data-act="pball">Назначить (${cl.length-done})</button></div></div>`:""}
   ${!bees.length?`<div class="remark">Пчёлок ещё нет в приложении — добавь их во вкладке «Команда».</div>`:""}
@@ -620,8 +633,9 @@ document.addEventListener("click",async e=>{
   const g=e.target.closest("[data-goday]");if(g){ui.date=g.dataset.goday;ui.tab="day";ui.sheet=null;ui.bk=null;await load();return}
   const b=e.target.closest("button");if(!b)return;const d=b.dataset;
   try{
-    if(d.tab){ui.tab=d.tab;ui.sheet=null;ui.open=null;if(d.tab==="plan")ui.date=today(1);await load();return}
+    if(d.tab){ui.tab=d.tab;ui.sheet=null;ui.open=null;if(d.tab==="plan")ui.date=new Date().getHours()<16?today():today(1);await load();return}
     if(d.d){ui.date=shiftDate(ui.date,+d.d);ui.sheet=null;ui.open=null;await load();return}
+    if(d.cdone){b.disabled=true;await call("clean_done",{cleaning_id:+d.cdone,undo:!!d.undo});toast(d.undo?"Отметка снята":"Отмечено: убрано");await load();return}
     if(d.pe){ui.sheet=ui.sheet==="pe"+d.pe?null:"pe"+d.pe;render();return}
     if(d.act==="pball"){const sid=+document.getElementById("pb").value;const todo=cache.day.flatMap(x=>[x.cleaning,x.general]).filter(c=>c&&!c.skip&&!(c.cleaners||[]).length);
       for(const c of todo)await call("assign",{cleaning_id:c.id,cleaner_ids:[sid]});toast(`Назначено: ${todo.length} уборок`);await load();return}
