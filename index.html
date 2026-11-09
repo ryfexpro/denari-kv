@@ -94,6 +94,7 @@ table{width:100%;border-collapse:collapse;font-size:14px}th,td{text-align:left;p
 const API="https://zsrddmgiefmuwvcobkin.supabase.co/functions/v1/kv-api";
 const PAY_ACTIONS=new Set(["payroll","payout_mark","staff_rate","staff_wrate","apt_rates","apt_rate","apt_grate","calendar"]);
 const TR_ACTIONS=new Set(["transfer_create","transfer_cancel"]);
+const MONEY_ACTIONS=new Set(["cash_box","cash_handover","money_month"]);
 const CAL_ACTIONS=new Set(["apt_month","booking_cancel","plan_edit","guest_msg"]);
 const BOT="apartmanager_bot";
 const TG=window.Telegram?.WebApp; TG?.ready(); TG?.expand?.();
@@ -115,9 +116,9 @@ const ru=s=>{const d=new Date(s+"T12:00:00");return d.toLocaleDateString("ru-RU"
 const dm=s=>s?s.slice(8,10)+"."+s.slice(5,7):"";
 function toast(m,err){const t=document.getElementById("toast");t.textContent=m;t.className="toast on"+(err?" err":"");clearTimeout(toast.h);toast.h=setTimeout(()=>t.className="toast",err?3500:2200);try{TG?.HapticFeedback?.notificationOccurred(err?"error":"success")}catch(e){}}
 // Чтение — с таймаутом и повтором (первый запрос после паузы иногда теряется в сети Telegram). Запись — без повтора, чтобы не задвоить.
-const READ=new Set(["me","apartments","staff","day","calendar","apt_month","prices","guests","guest_search","repairs","payroll","money","photos","guest_settings","apt_info","apt_rates"]);
+const READ=new Set(["me","apartments","staff","day","calendar","apt_month","prices","guests","guest_search","repairs","payroll","money","cash_box","money_month","photos","guest_settings","apt_info","apt_rates"]);
 async function call(action,body={}){
-  const url=CAL_ACTIONS.has(action)?API.replace("kv-api","kv-cal"):PAY_ACTIONS.has(action)?API.replace("kv-api","kv-pay"):TR_ACTIONS.has(action)?API.replace("kv-api","kv-transfer"):API;
+  const url=MONEY_ACTIONS.has(action)?API.replace("kv-api","kv-money"):CAL_ACTIONS.has(action)?API.replace("kv-api","kv-cal"):PAY_ACTIONS.has(action)?API.replace("kv-api","kv-pay"):TR_ACTIONS.has(action)?API.replace("kv-api","kv-transfer"):API;
   const tries=READ.has(action)?3:1;let r,last;
   for(let i=0;i<tries;i++){const ac=new AbortController(),tm=setTimeout(()=>ac.abort(),READ.has(action)?7000:25000);
     try{r=await fetch(url,{method:"POST",headers:{"content-type":"application/json","x-tg-init":TG?.initData||""},body:JSON.stringify({action,...body}),signal:ac.signal});clearTimeout(tm);break}
@@ -162,13 +163,13 @@ async function load(){
       if(ui.sheet==="gset")cache.gset=await call("guest_settings");if(ui.sheet==="ainfo")cache.ainfo=await call("apt_info")}
     if(ui.tab==="sal"){if(!ui.wk)ui.wk=weekOf(today(isAdmin()?-7:0));cache.pay=await call("payroll",{from:ui.wk[0],to:ui.wk[1]});if(ui.sheet==="rates")cache.rates=await call("apt_rates")}
     if(ui.tab==="price") await loadPrices();
-    if(ui.tab==="money") cache.money=await call("money",{from:ui.date.slice(0,8)+"01",to:ui.date});
+    if(ui.tab==="money"){cache.cash=await call("cash_box");if(me.role==="owner"){if(!ui.mm)ui.mm=today().slice(0,7);cache.mm=await call("money_month",{month:ui.mm})}}
   }catch(e){toast(e.message,1)}
   render();
 }
 function tabs(){
   const t=me.role==="cleaner"?[["day","Мои уборки"],["rep","Ремонт"]]:me.role==="master"?[["rep","Ремонт"]]:me.role==="dispatcher"?[["day","График"],["plan","План"],["cal","Календарь"],["sal","Пчёлки"],["rep","Ремонт"]]:me.role==="manager"?[["day","График"],["cal","Календарь"],["pay","Оплаты"]]:
-    [["day","График"],["plan","План"],["cal","Календарь"],["price","Цены"],["guests","Гости"],["pay","Оплаты"],["sal","Зарплаты"],["rep","Ремонт"],["team","Команда"]].concat(me.role==="owner"?[["money","Деньги"]]:[]);
+    [["day","График"],["plan","План"],["cal","Календарь"],["price","Цены"],["guests","Гости"],["pay","Оплаты"],["sal","Зарплаты"],["rep","Ремонт"],["team","Команда"]].concat([["money","Деньги"]]);
   return t.map(([k,n])=>`<button class="${ui.tab===k?"on":""}" data-tab="${k}">${n}</button>`).join("");
 }
 function dateNav(){return `<div class="dnav"><button class="sm" data-d="-1">‹</button><b>${ru(ui.date)}${ui.date===today()?" · сегодня":ui.date===today(1)?" · завтра":""}</b><button class="sm" data-d="1">›</button></div>`}
@@ -305,9 +306,27 @@ function viewTeam(){
   <p class="note">Пароли не нужны: вход только через Telegram сотрудника. Уволился — «Отключить», доступ пропадает мгновенно. Сменил телефон — «Новая ссылка».</p>`;
 }
 function viewMoney(){
-  const m=cache.money||[];const meth={cash:"Наличные",card:"Карта",revolut:"Revolut",ota:"Booking"};
-  return `<h1>Деньги с 1-го числа</h1><p class="sub">Что приняли на месте за ${new Date(ui.date+"T12:00").toLocaleDateString("ru-RU",{month:"long"})}. Выплаты Booking здесь появятся после Beds24.</p>
-  ${m.length?`<table><thead><tr><th>Способ</th><th>Валюта</th><th style="text-align:right">Сумма</th><th style="text-align:right">Оплат</th></tr></thead><tbody>${m.map(r=>`<tr><td>${meth[r.method]||r.method}</td><td>${r.currency}</td><td class="n">${Number(r.total).toLocaleString("ru-RU")}</td><td class="n">${r.n}</td></tr>`).join("")}</tbody></table>`:`<div class="empty">Оплат пока нет.</div>`}`;
+  const c=cache.cash||{items:[],totals:{},lei:0,history:[]}, f=n=>Math.round(Number(n)||0).toLocaleString("ru-RU");
+  const meth={cash:"Наличные",card:"Карта",revolut:"Revolut",ota:"Booking"}, cur=Object.entries(c.totals);
+  const cash=`<h1>Касса</h1><p class="sub">Наличные от гостей, которые получила Ира и ещё не передала Денни.</p>
+  <div class="card" style="--sc:${cur.length?"var(--amber)":"var(--good)"}"><div class="h"><span class="apt">💵 У Иры на руках</span></div>
+    ${cur.length?`<div style="font-family:var(--mono);font-size:22px">${cur.map(([k,v])=>`${f(v)} ${k}`).join(" + ")}</div><div class="note">≈ ${f(c.lei)} лей по курсу Нацбанка на день оплаты · ${c.items.length} оплат</div>
+    <details><summary class="note" style="cursor:pointer">От каких гостей</summary><table><tbody>${c.items.map(i=>`<tr><td>${new Date(i.received_at).toLocaleDateString("ru-RU",{day:"2-digit",month:"2-digit"})}</td><td>${esc(i.apt)}</td><td>${esc(i.guest_name||"")}</td><td class="n">${f(i.amount)} ${i.currency}</td></tr>`).join("")}</tbody></table></details>
+    ${ui.sheet==="hand"?`<div class="remark">Подтверди: Ира передала Денни <b>${cur.map(([k,v])=>`${f(v)} ${k}`).join(" + ")}</b>. После этого касса обнулится.</div><div class="bar"><button class="go" data-act="handdo">Да, передано</button><button data-act="close">Отмена</button></div>`
+      :`<div class="bar"><button class="go" data-act="hand">Ира передала деньги Денни</button></div>`}`
+    :`<div class="note">Пусто — все наличные переданы. Новые появятся, когда Ира запишет оплату во вкладке «Оплаты» (способ «Наличные»).</div>`}
+  </div>
+  ${c.history.length?`<details><summary class="note" style="cursor:pointer">Последние передачи</summary><table><tbody>${c.history.map(h=>`<tr><td>${new Date(h.at).toLocaleDateString("ru-RU")}</td><td>${Object.entries(h.amounts).filter(([k])=>k!=="lei").map(([k,v])=>`${f(v)} ${k}`).join(" + ")}</td><td class="n">≈ ${f(h.amounts.lei)} лей</td><td>${esc(h.by_name||"")}</td></tr>`).join("")}</tbody></table></details>`:""}`;
+  if(me.role!=="owner") return cash;
+  const m=cache.mm||{rows:[],pays:[]}, R=k=>m.rows.find(r=>r.source===k)||{n:0,nights:0,lei:0,no_price:0,eur:0}, bk=R("booking"), ex=R("extra");
+  const [y,mo]=ui.mm.split("-");
+  return cash+`<div class="dnav" style="margin-top:8px"><button class="sm" data-mm="-1">‹</button><b>Выручка · ${MON[+mo-1]} ${y}</b><button class="sm" data-mm="1">›</button></div>
+  <div class="stats"><div class="st"><b>${f(Number(bk.lei)+Number(ex.lei))}</b><span>лей всего</span></div><div class="st"><b>${bk.n+ex.n}</b><span>броней · ${bk.nights+ex.nights} ночей</span></div></div>
+  <table><thead><tr><th></th><th style="text-align:right">Броней</th><th style="text-align:right">Ночей</th><th style="text-align:right">Лей</th></tr></thead><tbody>
+    <tr><td>Booking</td><td class="n">${bk.n}</td><td class="n">${bk.nights}</td><td class="n">${f(bk.lei)}</td></tr>
+    <tr><td>Прямые${ex.eur?` <span class="note">(${f(ex.eur)} €)</span>`:""}</td><td class="n">${ex.n}</td><td class="n">${ex.nights}</td><td class="n">${f(ex.lei)}</td></tr></tbody></table>
+  <p class="note">По дате заезда, без незаездов. Евро переведены по курсу Нацбанка на день, когда бронь записали${m.fx?` (сегодня 1 € = ${Number(m.fx.eur).toFixed(2)} лей)`:""}. Booking — сумма, которую передаёт Booking.${ex.no_price?` У ${ex.no_price} прямых броней не указана сумма — они в выручку не попали.`:""}</p>
+  ${m.pays.length?`<h2 class="cdh">Получено на месте</h2><table><thead><tr><th>Способ</th><th style="text-align:right">Сумма</th><th style="text-align:right">≈ лей</th></tr></thead><tbody>${m.pays.map(r=>`<tr><td>${meth[r.method]||r.method}</td><td class="n">${f(r.amount)} ${r.currency}</td><td class="n">${f(r.lei)}</td></tr>`).join("")}</tbody></table>`:""}`;
 }
 
 function weekOf(dstr){const d=new Date(dstr+"T12:00:00");const dow=(d.getDay()+6)%7;const m=new Date(d);m.setDate(d.getDate()-dow);const su=new Date(m);su.setDate(m.getDate()+6);return [m.toLocaleDateString("sv-SE"),su.toLocaleDateString("sv-SE")]}
@@ -606,6 +625,9 @@ document.addEventListener("click",async e=>{
     if(d.pe){ui.sheet=ui.sheet==="pe"+d.pe?null:"pe"+d.pe;render();return}
     if(d.act==="pball"){const sid=+document.getElementById("pb").value;const todo=cache.day.flatMap(x=>[x.cleaning,x.general]).filter(c=>c&&!c.skip&&!(c.cleaners||[]).length);
       for(const c of todo)await call("assign",{cleaning_id:c.id,cleaner_ids:[sid]});toast(`Назначено: ${todo.length} уборок`);await load();return}
+    if(d.act==="hand"){ui.sheet="hand";render();return}
+    if(d.act==="handdo"){const r=await call("cash_handover",{ids:(cache.cash?.items||[]).map(i=>i.id)});ui.sheet=null;toast("Передано: "+r.sum);await load();return}
+    if(d.mm){const [y,m]=ui.mm.split("-").map(Number),t=new Date(y,m-1+(+d.mm),1);ui.mm=t.getFullYear()+"-"+String(t.getMonth()+1).padStart(2,"0");await load();return}
     if(d.cx){ui.cxl=+d.cx;render();return}
     if(d.cxno){ui.cxl=null;render();return}
     if(d.cxday){ui.cxl=+d.cxday;const bk=cache.day.find(x=>x.in?.id==d.cxday);ui.tab="cal";ui.calAll=false;ui.ca=bk?.apartment_id||ui.ca;ui.cm=ui.date.slice(0,8)+"01";ui.cd=ui.date;await load();return}
