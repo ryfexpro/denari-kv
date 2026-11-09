@@ -243,18 +243,33 @@ function extraForm(){const d=ui.exDate||ui.date,fa=ui.exApt?cache.apts.find(a=>a
   <p class="note">Прямая бронь (не Booking). Даты автоматически закроются на Booking через Beds24. Брони с Booking приходят сами.</p>
   <div class="bar"><button class="go" type="submit">${fa?`Закрыть ${esc(fa.name)}`:"Сохранить"}</button><button type="button" data-act="close">Отмена</button></div></form>`}
 function viberText(){
-  const r=cache.day.map(x=>x.cleaning?.skip?{...x,cleaning:null}:x); let t=`📅 График на ${dm(ui.date)}\n\n`;
-  for(const x of r.filter(x=>x.cleaning||x.in)) t+=`👉 ${x.apt}\nВыезд: ${x.out?(x.out.name||"")+(x.out.time?" в "+x.out.time:""):""}\nЗаезд: ${x.in?`${x.in.name||""} ${x.in.guests??""} взр на ${x.in.nights} ${x.in.nights>1?"ночи":"ночь"}${x.in.time?" в "+x.in.time:""}`:"Уборка на "+(x.cleaning?.prep??"")}${x.cleaning?.cleaner?`\nУбирает: ${x.cleaning.cleaner}`:""}\n\n`;
-  for(const x of r.filter(x=>x.general)) t+=`🧽 ${x.apt}\nГенеральная уборка${x.general.note?": "+x.general.note:""}${x.general.cleaner?`\nУбирает: ${x.general.cleaner}`:""}\n\n`;
-  for(const x of r.filter(x=>!x.cleaning&&!x.in&&!x.general&&x.stay_until)) t+=`👉 ${x.apt}\nПродолжают проживать до ${dm(x.stay_until)}\n\n`;
-  // Кто где — сводка по пчёлкам
-  const who={};for(const x of r)for(const c of [x.cleaning,x.general])if(c)for(const p of c.cleaners||[])(who[p.name]=who[p.name]||[]).push(x.apt+(c.kind==="general"?" (генеральная)":c.due?" к "+c.due:""));
-  const free=r.filter(x=>x.cleaning&&!(x.cleaning.cleaners||[]).length).map(x=>x.apt);
-  if(Object.keys(who).length){t+=`🐝 Кто где:\n`;for(const [n,l] of Object.entries(who))t+=`${n}: ${l.join(", ")}\n`;}
-  if(free.length)t+=`❗ Без пчёлки: ${free.join(", ")}\n`;
+  // Одно сообщение в группу: сначала кто какие квартиры убирает, потом все квартиры по порядку
+  const r=[...cache.day].sort((x,y)=>x.apartment_id-y.apartment_id).map(x=>x.cleaning?.skip?{...x,cleaning:null}:x);
+  const nt=n=>n==1?"ночь":n>1&&n<5?"ночи":"ночей", wd=["вс","пн","вт","ср","чт","пт","сб"][new Date(ui.date+"T12:00").getDay()];
+  const rel=ui.date===today(1)?"на завтра":ui.date===today()?"на сегодня":"на";
+  let t=`📅 ГРАФИК ${rel.toUpperCase()} · ${dm(ui.date)} (${wd})\n`;
+  // кто где
+  const who={},free=[];
+  for(const x of r)for(const c of [x.cleaning,x.general]){if(!c)continue;
+    const line=`• ${x.apt}${c.kind==="general"?" — генеральная":x.in?` — к ${x.in.time||c.due||"14:00"}`:""}`;
+    if((c.cleaners||[]).length)for(const p of c.cleaners)(who[p.name]=who[p.name]||[]).push(line);else free.push(line);}
+  if(Object.keys(who).length||free.length){
+    t+=`\n🐝 КТО ГДЕ УБИРАЕТ\n`;
+    for(const [n,l] of Object.entries(who).sort((a,b)=>b[1].length-a[1].length))t+=`\n👩 ${n} — ${l.length} кв.\n${l.join("\n")}\n`;
+    if(free.length)t+=`\n❗ Пока без пчёлки:\n${free.join("\n")}\n`;}
+  t+=`\n━━━━━━━━━━━━\n`;
+  for(const x of r){const c=x.cleaning,i=x.in,o=x.out;
+    t+=`\n👉 ${x.apt}\n`;
+    if(!c&&!i&&!o&&!x.general&&x.stay_until){t+=`🏠 Продолжают проживать до ${dm(x.stay_until)}\n`;continue}
+    t+=`⬅️ Выезд: ${o?(o.name||"гость")+(o.time?` в ${o.time}`:""):"—"}\n`;
+    t+=i?`➡️ Заезд: ${i.name||"гость"} · ${i.guests??"?"} взр · ${i.nights} ${nt(i.nights)}${i.time?` · в ${i.time}`:""}\n`:c?`➡️ Заезда нет — убрать после выезда${c.prep?`, подготовить на ${c.prep}`:""}\n`:"";
+    if(c){t+=`🧹 ${c.cleaner||"❗ без пчёлки"}${c.note?` · ${c.note}`:""}\n`}
+    if(x.general)t+=`🧽 Генеральная${x.general.note?`: ${x.general.note}`:""} · ${x.general.cleaner||"❗ без пчёлки"}\n`;
+  }
+  const busy=new Set(r.map(x=>x.apartment_id)), freeA=(cache.apts||[]).filter(a=>!busy.has(a.id));
+  if(freeA.length)t+=`\n🔑 Свободны: ${freeA.map(a=>a.name).join(", ")}\n`;
   return t.trim();
 }
-
 function viewCleaner(rows){
   const jobs=rows.flatMap(x=>[x.cleaning&&{x,c:x.cleaning},x.general&&{x,c:x.general}].filter(Boolean));
   return `${dateNav()}<h1>Мои уборки</h1>
