@@ -146,7 +146,7 @@ async function boot(){
     v.innerHTML=`<div class="empty">${esc(e.message)}</div>`;return;
   }
   if(Array.isArray(me.slots)&&me.slots.length) SLOTS=me.slots.map(x=>[x.k,x.n]);
-  document.getElementById("who").textContent=me.name+" · "+({owner:"владелец",admin:"админ",dispatcher:"помощник",cleaner:"пчёлка",master:"мастер",manager:"менеджер"}[me.role]||me.role);
+  document.getElementById("who").textContent=me.name+" · "+({owner:"владелец",admin:"админ",dispatcher:"помощник",cleaner:"пчёлка",ironer:"глажка",master:"мастер",manager:"менеджер"}[me.role]||me.role);
   try{if(TG?.addToHomeScreen&&TG.isVersionAtLeast?.("8.0")){const hb=document.getElementById("homebtn");TG.checkHomeScreenStatus?.(st=>{if(st!=="added"&&st!=="unsupported")hb.style.display=""});hb.onclick=()=>TG.addToHomeScreen()}}catch(_){}
   ui.tab=me.role==="master"?"rep":"day";
   if(canDispatch()){[cache.staff,cache.apts]=await Promise.all([call("staff"),call("apartments")])} else {cache.apts=await call("apartments").catch(()=>[])}
@@ -319,7 +319,7 @@ function viewRep(){
 }
 
 function viewTeam(){
-  const role={owner:"владелец",admin:"админ",dispatcher:"помощник",cleaner:"пчёлка",master:"мастер",manager:"менеджер"};
+  const role={owner:"владелец",admin:"админ",dispatcher:"помощник",cleaner:"пчёлка",ironer:"глажка",master:"мастер",manager:"менеджер"};
   return `<h1>Команда</h1><p class="sub">Пригласи сотрудника: отправь ему ссылку, он откроет её в Telegram — и сразу в системе.</p>
   <form class="sheet" id="invf"><div class="grid"><label class="f">Имя<input id="iv-n" required placeholder="Ольга"></label><label class="f">Роль<select id="iv-r"><option value="cleaner">🐝 Пчёлка</option><option value="dispatcher">Помощник (распределяет уборки)</option><option value="master">Мастер</option><option value="manager">Менеджер</option>${me.role==="owner"?`<option value="admin">Админ</option>`:""}</select></label><label class="f">Ставка за уборку, лей<input id="iv-rate" type="number" min="0"></label></div><div class="bar"><button class="go" type="submit">Создать приглашение</button></div></form>
   <table><thead><tr><th>Имя</th><th>Роль</th><th>Статус</th><th></th></tr></thead><tbody>${cache.staff.map(s=>{const can=s.role!=="owner"&&s.id!==me.id&&(s.role!=="admin"||me.role==="owner");return `<tr style="${s.active?"":"opacity:.5"}"><td>${esc(s.name)}</td><td>${role[s.role]||s.role}</td>
@@ -363,8 +363,8 @@ function viewSal(){
   <p class="note">Считаются уборки, которые пчёлка завершила (с фото): «на проверке» и «принято». ${adm?"Зарплата — ставка за неделю, выплата по пятницам. Отчёт приходит тебе и Ире в Telegram в пятницу в 09:00.":"Неделя — с понедельника по воскресенье."}</p>
   ${!rows.length?`<div class="empty">Пчёлок ещё нет — добавь их во вкладке «Команда».</div>`:""}
   ${rows.map(r=>`<div class="card" style="--sc:${!adm?(r.count?"var(--good)":"var(--line)"):r.paid?"var(--good)":"var(--amber)"}">
-    <div class="h"><span class="apt">🐝 ${esc(r.name)}${r.linked===false?` <span class="note">· ещё не вошла в приложение</span>`:""}</span>${adm?`<span style="font-family:var(--mono);font-size:17px">${r.amount} лей</span>`:""}</div>
-    <div class="note"><b style="color:var(--fg)">${r.count} ${kw(r.count)}</b> · <b style="color:var(--fg)">${r.days} ${dw(r.days)}</b>${r.assigned>r.count?` · ещё назначено: ${r.assigned-r.count}`:""}${r.general?` · генеральных: ${r.general}`:""}${r.remarks?` · замечаний: ${r.remarks}`:""}${adm&&r.weekly?" · ставка за неделю":""}${adm&&r.no_rate?` · <span style="color:var(--amber)">не задана ставка</span>`:""}</div>
+    <div class="h"><span class="apt">${r.role==="ironer"?"🧺":"🐝"} ${esc(r.name)}${r.role==="ironer"?` <span class="note">· глажка</span>`:""}</span>${adm?`<span style="font-family:var(--mono);font-size:17px">${r.amount} лей</span>`:""}</div>
+    ${r.role==="ironer"?`<div class="note">Глажка белья · ставка за неделю</div>`:`<div class="note"><b style="color:var(--fg)">${r.count} ${kw(r.count)}</b> · <b style="color:var(--fg)">${r.days} ${dw(r.days)}</b>${r.assigned>r.count?` · ещё назначено: ${r.assigned-r.count}`:""}${r.general?` · генеральных: ${r.general}`:""}${r.remarks?` · замечаний: ${r.remarks}`:""}${adm&&r.weekly?" · ставка за неделю":""}${adm&&r.no_rate?` · <span style="color:var(--amber)">не задана ставка</span>`:""}</div>`}
     ${r.items.length?`<details><summary class="note" style="cursor:pointer">По дням</summary><table><tbody>${r.items.map(i=>`<tr><td>${dm(i.date)}</td><td>${esc(i.apt)}</td><td>${i.kind==="general"?"генеральная":""}${i.team>1?" вдвоём":""} ${mark[i.status]||i.status}</td></tr>`).join("")}</tbody></table></details>`:""}
     ${adm?`<div class="bar">${r.paid?`${chip("Выплачено "+new Date(r.paid.at).toLocaleDateString("ru-RU"),"var(--good)")} <button class="sm" data-unpay="${r.staff_id}">Отменить</button>`:`<button class="go sm" data-payout="${r.staff_id}">Выплачено ${r.amount} лей</button>`}</div>`:""}
   </div>`).join("")}
