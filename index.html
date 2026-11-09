@@ -92,7 +92,7 @@ table{width:100%;border-collapse:collapse;font-size:14px}th,td{text-align:left;p
 <div class="toast" id="toast"></div>
 <script>
 const API="https://zsrddmgiefmuwvcobkin.supabase.co/functions/v1/kv-api";
-const PAY_ACTIONS=new Set(["payroll","payout_mark","staff_rate","apt_rates","apt_rate","apt_grate","calendar"]);
+const PAY_ACTIONS=new Set(["payroll","payout_mark","staff_rate","staff_wrate","apt_rates","apt_rate","apt_grate","calendar"]);
 const TR_ACTIONS=new Set(["transfer_create","transfer_cancel"]);
 const CAL_ACTIONS=new Set(["apt_month","booking_cancel","plan_edit","guest_msg"]);
 const BOT="apartmanager_bot";
@@ -160,14 +160,14 @@ async function load(){
     if(ui.tab==="team") cache.staff=await call("staff");
     if(ui.tab==="guests"){if(!ui.gfrom)ui.gfrom=today(-1);cache.guests=(await call("guests",{from:ui.gfrom,to:shiftDate(ui.gfrom,14)})).map(g=>({...g,id:+g.id}));
       if(ui.sheet==="gset")cache.gset=await call("guest_settings");if(ui.sheet==="ainfo")cache.ainfo=await call("apt_info")}
-    if(ui.tab==="sal"){if(!ui.wk)ui.wk=weekOf(today(-7));cache.pay=await call("payroll",{from:ui.wk[0],to:ui.wk[1]});if(ui.sheet==="rates")cache.rates=await call("apt_rates")}
+    if(ui.tab==="sal"){if(!ui.wk)ui.wk=weekOf(today(isAdmin()?-7:0));cache.pay=await call("payroll",{from:ui.wk[0],to:ui.wk[1]});if(ui.sheet==="rates")cache.rates=await call("apt_rates")}
     if(ui.tab==="price") await loadPrices();
     if(ui.tab==="money") cache.money=await call("money",{from:ui.date.slice(0,8)+"01",to:ui.date});
   }catch(e){toast(e.message,1)}
   render();
 }
 function tabs(){
-  const t=me.role==="cleaner"?[["day","Мои уборки"],["rep","Ремонт"]]:me.role==="master"?[["rep","Ремонт"]]:me.role==="dispatcher"?[["day","График"],["plan","План"],["cal","Календарь"],["rep","Ремонт"]]:me.role==="manager"?[["day","График"],["cal","Календарь"],["pay","Оплаты"]]:
+  const t=me.role==="cleaner"?[["day","Мои уборки"],["rep","Ремонт"]]:me.role==="master"?[["rep","Ремонт"]]:me.role==="dispatcher"?[["day","График"],["plan","План"],["cal","Календарь"],["sal","Пчёлки"],["rep","Ремонт"]]:me.role==="manager"?[["day","График"],["cal","Календарь"],["pay","Оплаты"]]:
     [["day","График"],["plan","План"],["cal","Календарь"],["price","Цены"],["guests","Гости"],["pay","Оплаты"],["sal","Зарплаты"],["rep","Ремонт"],["team","Команда"]].concat(me.role==="owner"?[["money","Деньги"]]:[]);
   return t.map(([k,n])=>`<button class="${ui.tab===k?"on":""}" data-tab="${k}">${n}</button>`).join("");
 }
@@ -312,22 +312,24 @@ function viewMoney(){
 
 function weekOf(dstr){const d=new Date(dstr+"T12:00:00");const dow=(d.getDay()+6)%7;const m=new Date(d);m.setDate(d.getDate()-dow);const su=new Date(m);su.setDate(m.getDate()+6);return [m.toLocaleDateString("sv-SE"),su.toLocaleDateString("sv-SE")]}
 function viewSal(){
-  const [f,t]=ui.wk, rows=cache.pay||[], act=rows.filter(r=>r.count>0), total=act.reduce((s,r)=>s+Number(r.amount),0), unpaid=act.filter(r=>!r.paid).reduce((s,r)=>s+Number(r.amount),0);
-  const mark={ok:"✓",review:"на проверке"};
+  const [f,t]=ui.wk, adm=isAdmin(), rows=(cache.pay||[]).filter(r=>r.active||r.count>0), act=rows.filter(r=>r.count>0||r.weekly);
+  const total=act.reduce((s,r)=>s+Number(r.amount||0),0), unpaid=act.filter(r=>!r.paid).reduce((s,r)=>s+Number(r.amount||0),0);
+  const mark={ok:"✓",review:"на проверке"}, dw=n=>n===1?"день":n>1&&n<5?"дня":"дней", kw=n=>n%10===1&&n%100!==11?"квартира":[2,3,4].includes(n%10)&&![12,13,14].includes(n%100)?"квартиры":"квартир";
   return `<div class="dnav"><button class="sm" data-wk="-7">‹</button><b>${dm(f)} – ${dm(t)}</b><button class="sm" data-wk="7">›</button></div>
-  <div class="stats"><div class="st"><b>${act.reduce((s,r)=>s+r.count,0)}</b><span>уборок за неделю</span></div><div class="st"><b>${act.length}</b><span>пчёлок работали</span></div><div class="st"><b>${total}</b><span>лей всего</span></div><div class="st"><b style="color:${unpaid?"var(--amber)":"var(--good)"}">${unpaid}</b><span>лей не выплачено</span></div></div>
-  <p class="note">Считаются уборки, которые пчёлка завершила (с фото): «на проверке» и «принято». Отчёт приходит тебе и Ире в Telegram каждую пятницу в 09:00 за прошлую неделю.</p>
-  ${!act.length?`<div class="empty">За эту неделю завершённых уборок нет.</div>`:""}
-  ${act.map(r=>`<div class="card" style="--sc:${r.paid?"var(--good)":"var(--amber)"}">
-    <div class="h"><span class="apt">🐝 ${esc(r.name)}</span><span style="font-family:var(--mono);font-size:17px">${r.amount} лей</span></div>
-    <div class="note">${r.count} уборок · ${r.days} ${r.days===1?"день":r.days<5?"дня":"дней"}${r.general?` · генеральных: ${r.general}`:""}${r.remarks?` · замечаний: ${r.remarks}`:""}${r.no_rate?` · <span style="color:var(--amber)">не задана ставка — посчитано 0</span>`:""}</div>
-    <details><summary class="note" style="cursor:pointer">Кто, где, когда</summary><table><tbody>${r.items.map(i=>`<tr><td>${dm(i.date)}</td><td>${esc(i.apt)}</td><td class="n">${i.rate??0} лей</td><td>${i.kind==="general"?"генеральная":""}${i.team>1?" вдвоём":""} ${mark[i.status]||i.status}</td></tr>`).join("")}</tbody></table></details>
-    <div class="bar">${r.paid?`${chip("Выплачено "+new Date(r.paid.at).toLocaleDateString("ru-RU"),"var(--good)")} <button class="sm" data-unpay="${r.staff_id}">Отменить</button>`:`<button class="go sm" data-payout="${r.staff_id}">Выплачено ${r.amount} лей</button>`}</div>
+  <div class="stats"><div class="st"><b>${rows.reduce((s,r)=>s+r.count,0)}</b><span>квартир убрано</span></div><div class="st"><b>${rows.filter(r=>r.count>0).length}</b><span>пчёлок работали</span></div>
+  ${adm?`<div class="st"><b>${total}</b><span>лей зарплат</span></div><div class="st"><b style="color:${unpaid?"var(--amber)":"var(--good)"}">${unpaid}</b><span>лей не выплачено</span></div>`:""}</div>
+  <p class="note">Считаются уборки, которые пчёлка завершила (с фото): «на проверке» и «принято». ${adm?"Зарплата — ставка за неделю, выплата по пятницам. Отчёт приходит тебе и Ире в Telegram в пятницу в 09:00.":"Неделя — с понедельника по воскресенье."}</p>
+  ${!rows.length?`<div class="empty">Пчёлок ещё нет — добавь их во вкладке «Команда».</div>`:""}
+  ${rows.map(r=>`<div class="card" style="--sc:${!adm?(r.count?"var(--good)":"var(--line)"):r.paid?"var(--good)":"var(--amber)"}">
+    <div class="h"><span class="apt">🐝 ${esc(r.name)}${r.linked===false?` <span class="note">· ещё не вошла в приложение</span>`:""}</span>${adm?`<span style="font-family:var(--mono);font-size:17px">${r.amount} лей</span>`:""}</div>
+    <div class="note"><b style="color:var(--fg)">${r.count} ${kw(r.count)}</b> · <b style="color:var(--fg)">${r.days} ${dw(r.days)}</b>${r.assigned>r.count?` · ещё назначено: ${r.assigned-r.count}`:""}${r.general?` · генеральных: ${r.general}`:""}${r.remarks?` · замечаний: ${r.remarks}`:""}${adm&&r.weekly?" · ставка за неделю":""}${adm&&r.no_rate?` · <span style="color:var(--amber)">не задана ставка</span>`:""}</div>
+    ${r.items.length?`<details><summary class="note" style="cursor:pointer">По дням</summary><table><tbody>${r.items.map(i=>`<tr><td>${dm(i.date)}</td><td>${esc(i.apt)}</td><td>${i.kind==="general"?"генеральная":""}${i.team>1?" вдвоём":""} ${mark[i.status]||i.status}</td></tr>`).join("")}</tbody></table></details>`:""}
+    ${adm?`<div class="bar">${r.paid?`${chip("Выплачено "+new Date(r.paid.at).toLocaleDateString("ru-RU"),"var(--good)")} <button class="sm" data-unpay="${r.staff_id}">Отменить</button>`:`<button class="go sm" data-payout="${r.staff_id}">Выплачено ${r.amount} лей</button>`}</div>`:""}
   </div>`).join("")}
-  <div class="card"><div class="h"><span class="apt">Ставки за уборку</span><button class="sm" data-act="rates">${ui.sheet==="rates"?"Скрыть":"Настроить"}</button></div>
-  ${ui.sheet==="rates"?`<p class="note">Ставка пчёлки — по умолчанию. Если у квартиры своя ставка (большая квартира), она важнее. Генеральная — если не задана, считается ×2 от обычной. Если убирают вдвоём — ставка делится поровну, если в уборке не отмечено «каждой полная ставка».</p>
-    <table><tbody>${(cache.pay||[]).map(p=>`<tr><td>🐝 ${esc(p.name)}</td><td><input type="number" min="0" style="width:110px" value="${p.rate??""}" data-srate="${p.staff_id}" placeholder="лей"></td></tr>`).join("")}</tbody></table>
-    <table><thead><tr><th>Квартира</th><th>Обычная</th><th>Генеральная</th></tr></thead><tbody>${(cache.rates||[]).map(a=>`<tr><td>${esc(a.name)}</td><td><input type="number" min="0" style="width:96px" value="${a.clean_rate_lei??""}" data-arate="${a.id}" placeholder="как у пчёлки"></td><td><input type="number" min="0" style="width:96px" value="${a.general_rate_lei??""}" data-grate="${a.id}" placeholder="×2"></td></tr>`).join("")}</tbody></table>`:""}</div>`;
+  ${adm?`<div class="card"><div class="h"><span class="apt">Ставки</span><button class="sm" data-act="rates">${ui.sheet==="rates"?"Скрыть":"Настроить"}</button></div>
+  ${ui.sheet==="rates"?`<p class="note">«В неделю» — фиксированная зарплата за неделю (выплата в пятницу). Если её нет — платим за каждую уборку: ставка пчёлки или своя ставка квартиры.</p>
+    <table><thead><tr><th>Пчёлка</th><th>В неделю</th><th>За уборку</th></tr></thead><tbody>${(cache.pay||[]).map(p=>`<tr><td>🐝 ${esc(p.name)}</td><td><input type="number" min="0" style="width:96px" value="${p.week_rate??""}" data-swrate="${p.staff_id}" placeholder="лей"></td><td><input type="number" min="0" style="width:96px" value="${p.rate??""}" data-srate="${p.staff_id}" placeholder="лей"></td></tr>`).join("")}</tbody></table>
+    <table><thead><tr><th>Квартира</th><th>Обычная</th><th>Генеральная</th></tr></thead><tbody>${(cache.rates||[]).map(a=>`<tr><td>${esc(a.name)}</td><td><input type="number" min="0" style="width:96px" value="${a.clean_rate_lei??""}" data-arate="${a.id}" placeholder="как у пчёлки"></td><td><input type="number" min="0" style="width:96px" value="${a.general_rate_lei??""}" data-grate="${a.id}" placeholder="×2"></td></tr>`).join("")}</tbody></table>`:""}</div>`:""}`;
 }
 
 function viewCal(){
@@ -690,6 +692,7 @@ document.addEventListener("change",async e=>{
     if(t.dataset.csel){ui.ca=+t.value;ui.cd=null;ui.exApt=null;if(ui.sheet==="extra")ui.sheet=null;await load();return}
     if(t.dataset.psel){ui.pa=+t.value;ui.psel=null;ui.pconf=null;await load();return}
     if(t.dataset.payeach){await call("set_pay_each",{cleaning_id:+t.dataset.payeach,value:t.checked});toast(t.checked?"Каждой — полная ставка":"Ставка делится поровну");return}
+    if(t.dataset.swrate){await call("staff_wrate",{id:+t.dataset.swrate,rate_lei:t.value===""?null:+t.value});toast("Ставка в неделю сохранена");await load();return}
     if(t.dataset.srate){await call("staff_rate",{id:+t.dataset.srate,rate_lei:t.value===""?null:+t.value});toast("Ставка сохранена");await load();return}
     if(t.dataset.grate){await call("apt_grate",{id:+t.dataset.grate,rate_lei:t.value===""?null:+t.value});toast("Ставка генеральной сохранена");await load();return}
     if(t.dataset.arate){await call("apt_rate",{id:+t.dataset.arate,rate_lei:t.value===""?null:+t.value});toast("Ставка квартиры сохранена");await load();return}
