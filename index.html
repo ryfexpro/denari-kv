@@ -94,7 +94,7 @@ table{width:100%;border-collapse:collapse;font-size:14px}th,td{text-align:left;p
 const API="https://zsrddmgiefmuwvcobkin.supabase.co/functions/v1/kv-api";
 const PAY_ACTIONS=new Set(["payroll","payout_mark","staff_rate","staff_wrate","apt_rates","apt_rate","apt_grate","calendar"]);
 const TR_ACTIONS=new Set(["transfer_create","transfer_cancel"]);
-const PLAN_ACTIONS=new Set(["clean_done"]);
+const PLAN_ACTIONS=new Set(["clean_done","no_show"]);
 const MONEY_ACTIONS=new Set(["cash_box","cash_handover","money_month"]);
 const CAL_ACTIONS=new Set(["apt_month","booking_cancel","plan_edit","guest_msg"]);
 const BOT="apartmanager_bot";
@@ -247,7 +247,8 @@ function viberText(){
   const r=[...cache.day].sort((x,y)=>x.apartment_id-y.apartment_id).map(x=>x.cleaning?.skip?{...x,cleaning:null}:x);
   const nt=n=>n==1?"ночь":n>1&&n<5?"ночи":"ночей", wd=["вс","пн","вт","ср","чт","пт","сб"][new Date(ui.date+"T12:00").getDay()];
   const rel=ui.date===today(1)?"на завтра":ui.date===today()?"на сегодня":"на";
-  let t=`📅 ГРАФИК ${rel.toUpperCase()} · ${dm(ui.date)} (${wd})\n`;
+  let sent=null;try{sent=localStorage.getItem("kv_sent_"+ui.date)}catch(_){}
+  let t=`${sent?"🔄 ОБНОВЛЁННЫЙ ":"📅 "}ГРАФИК ${rel.toUpperCase()} · ${dm(ui.date)} (${wd})\n`;
   // кто где
   const who={},free=[];
   for(const x of r)for(const c of [x.cleaning,x.general]){if(!c)continue;
@@ -603,13 +604,14 @@ function viewPlan(){
     <div class="kv"><span>◀ Выезд</span><b>${o?esc(o.name||"гость")+(o.time?" · до "+esc(o.time):""):"—"}</b>
     <span>▶ Заезд</span><b>${i?`${esc(i.name||"гость")} · ${i.guests??"?"} чел.${i.time?" · "+esc(i.time):""}${i.no_show?" · ❌ незаезд":""}`:"—"}</b>
     ${c?`<span>🧹 Уборка</span><b>${c.skip?"не нужна":`на ${c.prep??"?"} чел.${c.due?" к "+esc(c.due):""}`}${c.note?" · "+esc(c.note):""}</b>`:""}</div>
+    ${i&&isAdmin()&&ui.date<=today()?(ui.sheet==="ns"+i.id?`<div class="remark">Гость <b>${esc(i.name||"")}</b> не приехал? Бронь отменится, и квартира сразу снова откроется на Booking.${i.source==="booking"?" Потом отметь незаезд в экстранете Booking — иначе возьмут комиссию.":""}</div><div class="bar"><button class="warn" data-nsdo="${i.id}">Да, незаезд — открыть квартиру</button><button class="sm" data-act="close">Нет</button></div>`
+      :`<div class="bar"><button class="sm warn" data-ns="${i.id}">❌ Незаезд</button></div>`):""}
     ${c&&!c.skip?beeChips(c)+doneBtn(c):""}
     ${x.general?`<div class="note">🧽 Генеральная${x.general.note?": "+esc(x.general.note):""}</div>${beeChips(x.general)}${doneBtn(x.general)}`:""}
     ${ed?`<form class="sheet" data-pef="${x.apartment_id}"><div class="grid">
       ${i?`<label class="f">Время заезда<input id="pe-t" value="${esc(i.time||"")}" placeholder="14:00"></label>`:""}
       ${c?`<label class="f">Подготовить на, чел.<input id="pe-g" type="number" min="1" max="20" value="${c.prep??""}"></label><label class="f">Готово к<input id="pe-d" value="${esc(c.due||"")}" placeholder="14:00"></label>`:""}</div>
       ${c?`<label class="f">Заметка пчёлке<input id="pe-n" value="${esc(c.note||"")}" placeholder="например: поменять шторы"></label>`:""}
-      ${i?`<label class="chk"><input type="checkbox" id="pe-ns" ${i.no_show?"checked":""}> Незаезд — гость не приехал</label>`:""}
       ${c?`<label class="chk"><input type="checkbox" id="pe-sk" ${c.skip?"checked":""}> Уборка не нужна (пчёлке придёт отмена)</label>`:""}
       <div class="bar"><button class="go" type="submit">Сохранить</button><button type="button" data-act="close">Отмена</button></div></form>`:""}
   </div>`};
@@ -650,6 +652,8 @@ document.addEventListener("click",async e=>{
   try{
     if(d.tab){ui.tab=d.tab;ui.sheet=null;ui.open=null;if(d.tab==="plan")ui.date=new Date().getHours()<16?today():today(1);await load();return}
     if(d.d){ui.date=shiftDate(ui.date,+d.d);ui.sheet=null;ui.open=null;await load();return}
+    if(d.ns){ui.sheet="ns"+d.ns;render();return}
+    if(d.nsdo){b.disabled=true;const r=await call("no_show",{booking_id:+d.nsdo});ui.sheet=null;toast(r.note||"Незаезд отмечен");await load();return}
     if(d.cdone){b.disabled=true;await call("clean_done",{cleaning_id:+d.cdone,undo:!!d.undo});toast(d.undo?"Отметка снята":"Отмечено: убрано");await load();return}
     if(d.pe){ui.sheet=ui.sheet==="pe"+d.pe?null:"pe"+d.pe;render();return}
     if(d.act==="pball"){const sid=+document.getElementById("pb").value;const todo=cache.day.flatMap(x=>[x.cleaning,x.general]).filter(c=>c&&!c.skip&&!(c.cleaners||[]).length);
@@ -680,7 +684,7 @@ document.addEventListener("click",async e=>{
     if(d.act==="extra"){ui.sheet=ui.sheet==="extra"?null:"extra";ui.exApt=null;ui.exDate=null}
     else if(d.act==="viber"){ui.sheet=ui.sheet==="viber"?null:"viber"}
     else if(d.act==="close"){ui.sheet=null;ui.exApt=null;ui.exDate=null}
-    else if(d.act==="vsend"||d.act==="tsend"){const t=viberText();const u=d.act==="vsend"?`viber://forward?text=${encodeURIComponent(t)}`:`https://t.me/share/url?url=${encodeURIComponent("📅")}&text=${encodeURIComponent(t)}`;
+    else if(d.act==="vsend"||d.act==="tsend"){const t=viberText();try{localStorage.setItem("kv_sent_"+ui.date,"1")}catch(_){}const u=d.act==="vsend"?`viber://forward?text=${encodeURIComponent(t)}`:`https://t.me/share/url?url=${encodeURIComponent("📅")}&text=${encodeURIComponent(t)}`;
       if(d.act==="tsend"&&TG?.openTelegramLink)TG.openTelegramLink(u);else if(TG?.openLink)TG.openLink(u);else window.open(u,"_blank");return}
     else if(d.act==="copy"){const t=viberText();try{await navigator.clipboard.writeText(t);toast("Скопировано — вставь в Viber")}catch(_){const r=document.createRange();r.selectNodeContents(document.getElementById("vtxt"));getSelection().removeAllRanges();getSelection().addRange(r);toast("Текст выделен — скопируй")}return}
     else if(d.gal){const id=+d.gal;ui.open=ui.open==="gal"+id?null:"gal"+id;render();if(ui.open){cache.gal[id]=await call("photos",{cleaning_id:id})}}
@@ -689,7 +693,7 @@ document.addEventListener("click",async e=>{
     else if(d.dorem){await call("review",{cleaning_id:+d.dorem,ok:false,remark:document.getElementById("rt").value});ui.sheet=null;toast("Замечание отправлено");await load();return}
     else if(d.move){ui.sheet=ui.sheet==="move"+d.move?null:"move"+d.move}
     else if(d.domove){const r=await call("booking_move",{booking_id:+d.domove,apartment_id:+document.getElementById("mv").value});ui.sheet=null;toast(r.note||"Гость переселён");await load();return}
-    else if(d.noshow){const r=await call("booking_noshow",{booking_id:+d.noshow,value:true});toast(r.note||"Отмечено");await load();return}
+    else if(d.noshow){ui.tab="plan";ui.sheet="ns"+d.noshow;await load();document.querySelector("[data-nsdo]")?.scrollIntoView({behavior:"smooth",block:"center"});return}
     else if(d.unnoshow){await call("booking_noshow",{booking_id:+d.unnoshow,value:false});await load();return}
     else if(d.paysel){ui.sheet="pay"+d.paysel;ui.payM=d.m;ui.payC=d.c}
     else if(d.rs){await call("repair_update",{id:+d.rs,status:d.to});toast(d.to==="work"?"Взято в работу":"Отмечено: сделано");await load();return}
@@ -764,7 +768,7 @@ document.addEventListener("submit",async e=>{
       const r=await call("price_set",{apartment_id:ui.pa,from:lo,to:hi,price:f2.p||null,min_stay:f2.m||null,closed:f2.c==="close"?true:f2.c==="open"?false:null,wd:f2.wd.length<7?f2.wd:[]});
       ui.psel=null;ui.pconf=null;ui.pwd=null;ui.pc="";toast(`Отправлено в Beds24: ${r.days} дн. На Booking — через 1–2 мин.`);await load();return}
     if(f.dataset.pef){const x=cache.day.find(r=>r.apartment_id===+f.dataset.pef),c=x?.cleaning,i=x?.in,body={};
-      if(i){body.booking_id=i.id;body.checkin_time=v("pe-t")||"";body.no_show=!!document.getElementById("pe-ns")?.checked}
+      if(i){body.booking_id=i.id;body.checkin_time=v("pe-t")||""}
       if(c){body.cleaning_id=c.id;body.prep_guests=v("pe-g")||"";body.due_time=v("pe-d")||"";body.note=v("pe-n")||"";body.skip=!!document.getElementById("pe-sk")?.checked}
       await call("plan_edit",body);ui.sheet=null;toast("Сохранено");await load();return}
     if(f.id==="aif"){const info={notes:{}};f.querySelectorAll("[data-ai]").forEach(i=>info[i.dataset.ai]=i.value);f.querySelectorAll("[data-an]").forEach(i=>info.notes[i.dataset.an]=i.value);
