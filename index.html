@@ -61,6 +61,7 @@ label.f{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--mu
 .gal{display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:6px}.gal a{display:block;aspect-ratio:1;border-radius:9px;overflow:hidden;background:var(--panel2)}.gal img{width:100%;height:100%;object-fit:cover}
 .note{font-size:13px;color:var(--mute)}
 .remark{background:color-mix(in srgb,var(--amber) 10%,var(--panel2));border:1px solid color-mix(in srgb,var(--amber) 35%,var(--line));border-radius:10px;padding:8px 10px;font-size:14px}
+.exapt{font-family:var(--display);font-size:17px;font-weight:500;padding:8px 10px;border-radius:10px;background:color-mix(in srgb,var(--accent) 10%,var(--panel2));border:1px solid color-mix(in srgb,var(--accent) 35%,var(--line))}.exapt span{display:block;font-family:var(--body);font-size:12.5px;color:var(--mute);font-weight:400}
 .sheet{background:var(--panel);border:1px solid var(--accent);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:10px}.sheet .grid{display:flex;flex-wrap:wrap;gap:8px}
 pre{white-space:pre-wrap;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px;font-family:var(--body);font-size:13px;margin:0;max-height:320px;overflow:auto;user-select:text}
 .empty{background:var(--panel);border:1px dashed var(--line);border-radius:14px;padding:22px;text-align:center;color:var(--mute)}
@@ -227,15 +228,17 @@ function viewDay(){
 function gallery(id){const g=cache.gal[id];if(!g)return `<div class="note">Загружаю фото…</div>`;if(!g.length)return `<div class="note">Фото пока нет.</div>`;
   const ord=k=>{const i=SLOTS.findIndex(x=>x[0]===k);return i<0?99:i};
   return `<div class="gal">${[...g].sort((a,b)=>ord(a.slot)-ord(b.slot)).map(p=>`<a href="${p.url}" target="_blank" rel="noopener" style="position:relative"><img src="${p.url}" alt="${esc(slotName(p.slot))}" loading="lazy"><span class="cap">${esc(slotName(p.slot))}</span></a>`).join("")}</div>`}
-function extraForm(){const d=ui.date;return `<form class="sheet" id="exf"><b>Новая бронь</b><div class="grid">
-  <label class="f">Квартира<select id="ex-a">${cache.apts.map(a=>`<option value="${a.id}">${esc(a.name)}${a.booking_name?" — "+esc(a.booking_name):""}</option>`).join("")}</select></label>
+function extraForm(){const d=ui.exDate||ui.date,fa=ui.exApt?cache.apts.find(a=>a.id===ui.exApt):null;return `<form class="sheet" id="exf">${fa
+  ?`<b>Новая бронь</b><div class="exapt">🏠 ${esc(fa.name)}${fa.booking_name?`<span>${esc(fa.booking_name)}</span>`:""}</div><input type="hidden" id="ex-a" value="${fa.id}">`
+  :`<b>Новая бронь</b>`}<div class="grid">
+  ${fa?"":`<label class="f">Квартира<select id="ex-a" required><option value="">— выбери квартиру —</option>${cache.apts.map(a=>`<option value="${a.id}">${esc(a.name)}${a.booking_name?" — "+esc(a.booking_name):""}</option>`).join("")}</select></label>`}
   <input type="hidden" id="ex-src" value="extra">
   <label class="f">Заезд<input id="ex-ci" type="date" value="${d}" required></label><label class="f">Выезд<input id="ex-co" type="date" value="${shiftDate(d,1)}" required></label>
   <label class="f">Время заезда<input id="ex-t" placeholder="14:00"></label><label class="f">Гостей<input id="ex-g" type="number" min="1" value="2"></label>
   <label class="f">Сумма за всё, €<input id="ex-p" type="number" min="0" step="1"></label><label class="f">Трансфер, €<input id="ex-tr" type="number" min="0" step="1"></label>
   <label class="f">Имя гостя<input id="ex-n"></label><label class="f">Телефон<input id="ex-ph" inputmode="tel"></label></div>
   <p class="note">Прямая бронь (не Booking). Даты автоматически закроются на Booking через Beds24. Брони с Booking приходят сами.</p>
-  <div class="bar"><button class="go" type="submit">Сохранить</button><button type="button" data-act="close">Отмена</button></div></form>`}
+  <div class="bar"><button class="go" type="submit">${fa?`Закрыть ${esc(fa.name)}`:"Сохранить"}</button><button type="button" data-act="close">Отмена</button></div></form>`}
 function viberText(){
   const r=cache.day.map(x=>x.cleaning?.skip?{...x,cleaning:null}:x); let t=`📅 График на ${dm(ui.date)}\n\n`;
   for(const x of r.filter(x=>x.cleaning||x.in)) t+=`👉 ${x.apt}\nВыезд: ${x.out?(x.out.name||"")+(x.out.time?" в "+x.out.time:""):""}\nЗаезд: ${x.in?`${x.in.name||""} ${x.in.guests??""} взр на ${x.in.nights} ${x.in.nights>1?"ночи":"ночь"}${x.in.time?" в "+x.in.time:""}`:"Уборка на "+(x.cleaning?.prep??"")}${x.cleaning?.cleaner?`\nУбирает: ${x.cleaning.cleaner}`:""}\n\n`;
@@ -536,7 +539,7 @@ function viewCalApt(){
     ${o&&o!==b?card(o,"◀ Выезд"):""}${b?card(b,b.checkin===d?"▶ Заезд":"Живёт"):""}
     ${!b?`<div class="card"><div class="h"><span class="apt">Свободно</span></div><div class="note">Ночь с ${dm(d)} на ${dm(shiftDate(d,1))} никем не занята.</div></div>`:""}
     ${c.map(x=>`<div class="note">🧹 ${x.kind==="general"?"Генеральная":"Уборка"}: ${CST[x.status]||x.status}${x.cleaner?" · "+esc(x.cleaner):" · не назначена"}</div>`).join("")}
-    <div class="bar"><button class="sm" data-goday="${d}">График дня</button>${isAdmin()?`${!b?`<button class="sm" data-cnew="${d}">+ Бронь на эту дату</button>`:""}<button class="sm" data-cprice="${d}">Цена на эту дату</button>`:""}</div>`}
+    <div class="bar"><button class="sm" data-goday="${d}">График дня</button>${isAdmin()?`${!b?`<button class="sm" data-cnew="${d}">+ Бронь на эту дату</button>`:""}<button class="sm" data-cprice="${d}">Цена на эту дату</button>`:""}</div>${ui.sheet==="extra"&&ui.exApt?extraForm():""}`}
   return head+`<div class="prleg"><span><i class="bkd"></i>Booking</span><span><i class="cex"></i>экстра</span><span><i class="fr"></i>свободно</span><span>занято ${occ} из ${n} ночей</span></div>
   <div class="prgrid">${["пн","вт","ср","чт","пт","сб","вс"].map(x=>`<div class="prw">${x}</div>`).join("")}${'<div></div>'.repeat(first)}${cells}</div>
   ${det||`<p class="note">Нажми на дату — увидишь всё по брони: гость, даты, телефон, оплата, трансфер, уборка.</p>`}`;
@@ -592,7 +595,7 @@ async function upload(url,blob){
 
 document.addEventListener("click",async e=>{
   const pdv=e.target.closest("[data-pd]");if(pdv){const d0=pdv.dataset.pd,s0=ui.psel||{};ui.pconf=null;ui.psel=!s0.a||s0.b?{a:d0}:{a:s0.a,b:d0};if(!s0.a||s0.b){ui.pc="";ui.pwd=null}render();if(ui.psel.b)document.getElementById("prf")?.scrollIntoView({behavior:"smooth",block:"end"});return}
-  const cdv=e.target.closest("[data-cd]");if(cdv){ui.cd=ui.cd===cdv.dataset.cd?null:cdv.dataset.cd;render();if(ui.cd)document.querySelector(".cdh")?.scrollIntoView({behavior:"smooth",block:"start"});return}
+  const cdv=e.target.closest("[data-cd]");if(cdv){if(ui.exApt){ui.exApt=null;ui.exDate=null;ui.sheet=null}ui.cd=ui.cd===cdv.dataset.cd?null:cdv.dataset.cd;render();if(ui.cd)document.querySelector(".cdh")?.scrollIntoView({behavior:"smooth",block:"start"});return}
   const g=e.target.closest("[data-goday]");if(g){ui.date=g.dataset.goday;ui.tab="day";ui.sheet=null;ui.bk=null;await load();return}
   const b=e.target.closest("button");if(!b)return;const d=b.dataset;
   try{
@@ -608,7 +611,7 @@ document.addEventListener("click",async e=>{
     if(d.cm){ui.cm=shiftMonth(ui.cm,+d.cm);ui.cd=null;await load();return}
     if(d.act==="calall"){ui.calAll=true;await load();return}
     if(d.act==="calone"){ui.calAll=false;await load();return}
-    if(d.cnew){ui.date=d.cnew;ui.tab="day";ui.sheet="extra";await load();return}
+    if(d.cnew){ui.exApt=ui.ca;ui.exDate=d.cnew;ui.sheet="extra";render();document.getElementById("exf")?.scrollIntoView({behavior:"smooth",block:"start"});return}
     if(d.cprice){ui.tab="price";ui.pa=ui.ca;ui.pm=d.cprice.slice(0,8)+"01";ui.psel={a:d.cprice};ui.pconf=null;ui.pc="";ui.pwd=null;await load();return}
     if(d.pm){ui.pm=shiftMonth(ui.pm,+d.pm);ui.psel=null;ui.pconf=null;await load();return}
     if(d.pq){const days=cache.pr.days.filter(x=>x.d>=today());if(!days.length)return;ui.psel={a:days[0].d,b:days[days.length-1].d};ui.pwd=d.pq==="we"?[5,6]:null;ui.pc="";ui.pconf=null;render();document.getElementById("prf")?.scrollIntoView({behavior:"smooth",block:"end"});return}
@@ -621,9 +624,9 @@ document.addEventListener("click",async e=>{
       const bkd=cache.pr.days.filter(x=>x.d>=lo&&x.d<=hi&&x.booked).length;
       ui.pwd=f.wd;ui.pmore=!!document.querySelector("#prf details[open]");ui.pconf=`${a.name}${a.booking_name?" ("+a.booking_name+")":""}, ${dm(lo)}${hi!==lo?"–"+dm(hi):""}${wd}: ${[f.p&&"цена "+f.p+" лей",f.m&&"мин. ночей "+f.m,f.c==="close"&&"закрыть",f.c==="open"&&"открыть"].filter(Boolean).join(", ")}.${bkd?` В периоде ${bkd} дн. уже заняты — брони не изменятся.`:""} Отправить?`;render();
       const fe=document.getElementById("prf");if(fe){document.getElementById("pr-p").value=f.p||"";document.getElementById("pr-m").value=f.m||"";fe.scrollIntoView({behavior:"smooth",block:"end"})}return}
-    if(d.act==="extra"){ui.sheet=ui.sheet==="extra"?null:"extra"}
+    if(d.act==="extra"){ui.sheet=ui.sheet==="extra"?null:"extra";ui.exApt=null;ui.exDate=null}
     else if(d.act==="viber"){ui.sheet=ui.sheet==="viber"?null:"viber"}
-    else if(d.act==="close"){ui.sheet=null}
+    else if(d.act==="close"){ui.sheet=null;ui.exApt=null;ui.exDate=null}
     else if(d.act==="vsend"||d.act==="tsend"){const t=viberText();const u=d.act==="vsend"?`viber://forward?text=${encodeURIComponent(t)}`:`https://t.me/share/url?url=${encodeURIComponent("📅")}&text=${encodeURIComponent(t)}`;
       if(d.act==="tsend"&&TG?.openTelegramLink)TG.openTelegramLink(u);else if(TG?.openLink)TG.openLink(u);else window.open(u,"_blank");return}
     else if(d.act==="copy"){const t=viberText();try{await navigator.clipboard.writeText(t);toast("Скопировано — вставь в Viber")}catch(_){const r=document.createRange();r.selectNodeContents(document.getElementById("vtxt"));getSelection().removeAllRanges();getSelection().addRange(r);toast("Текст выделен — скопируй")}return}
@@ -684,7 +687,7 @@ document.addEventListener("change",async e=>{
   try{
     if(t.dataset.glang){ui.glang=ui.glang||{};ui.glang[+t.dataset.glang]=t.value;render();return}
     if(t.dataset.aisel){ui.aid=+t.value;render();return}
-    if(t.dataset.csel){ui.ca=+t.value;ui.cd=null;await load();return}
+    if(t.dataset.csel){ui.ca=+t.value;ui.cd=null;ui.exApt=null;if(ui.sheet==="extra")ui.sheet=null;await load();return}
     if(t.dataset.psel){ui.pa=+t.value;ui.psel=null;ui.pconf=null;await load();return}
     if(t.dataset.payeach){await call("set_pay_each",{cleaning_id:+t.dataset.payeach,value:t.checked});toast(t.checked?"Каждой — полная ставка":"Ставка делится поровну");return}
     if(t.dataset.srate){await call("staff_rate",{id:+t.dataset.srate,rate_lei:t.value===""?null:+t.value});toast("Ставка сохранена");await load();return}
@@ -702,7 +705,7 @@ document.addEventListener("change",async e=>{
 document.addEventListener("submit",async e=>{
   e.preventDefault();const f=e.target,v=id=>document.getElementById(id)?.value;
   try{
-    if(f.id==="exf"){const r=await call("booking_create",{apartment_id:+v("ex-a"),source:v("ex-src"),checkin:v("ex-ci"),checkout:v("ex-co"),checkin_time:v("ex-t")||null,guests:+v("ex-g")||null,price_total:v("ex-p")?+v("ex-p"):null,transfer_eur:v("ex-tr")?+v("ex-tr"):null,name:v("ex-n")||null,phone:v("ex-ph")||null});ui.sheet=null;toast("Бронь сохранена");await load();if(r.note)setTimeout(()=>toast(r.note),2400);return}
+    if(f.id==="exf"){const r=await call("booking_create",{apartment_id:+v("ex-a"),source:v("ex-src"),checkin:v("ex-ci"),checkout:v("ex-co"),checkin_time:v("ex-t")||null,guests:+v("ex-g")||null,price_total:v("ex-p")?+v("ex-p"):null,transfer_eur:v("ex-tr")?+v("ex-tr"):null,name:v("ex-n")||null,phone:v("ex-ph")||null});const fromCal=!!ui.exApt;ui.sheet=null;ui.exApt=null;ui.exDate=null;toast(fromCal?"Готово: даты закрыты":"Бронь сохранена");await load();if(r.note)setTimeout(()=>toast(r.note),2400);return}
     if(f.id==="prf"){const f2=ui.pform,s=ui.psel,lo=s.b&&s.b<s.a?s.b:s.a,hi=s.b?(s.b<s.a?s.a:s.b):s.a;
       const r=await call("price_set",{apartment_id:ui.pa,from:lo,to:hi,price:f2.p||null,min_stay:f2.m||null,closed:f2.c==="close"?true:f2.c==="open"?false:null,wd:f2.wd.length<7?f2.wd:[]});
       ui.psel=null;ui.pconf=null;ui.pwd=null;ui.pc="";toast(`Отправлено в Beds24: ${r.days} дн. На Booking — через 1–2 мин.`);await load();return}
