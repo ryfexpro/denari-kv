@@ -96,7 +96,7 @@ const PAY_ACTIONS=new Set(["payroll","payout_mark","staff_rate","staff_wrate","a
 const TR_ACTIONS=new Set(["transfer_create","transfer_cancel"]);
 const PLAN_ACTIONS=new Set(["clean_done","no_show"]);
 const MONEY_ACTIONS=new Set(["cash_box","cash_handover","money_month"]);
-const CAL_ACTIONS=new Set(["apt_month","booking_cancel","plan_edit","guest_msg"]);
+const CAL_ACTIONS=new Set(["apt_month","booking_cancel","booking_edit","plan_edit","guest_msg"]);
 const BOT="apartmanager_bot";
 const TG=window.Telegram?.WebApp; TG?.ready(); TG?.expand?.();
 function setTheme(t){document.documentElement.dataset.theme=t;try{localStorage.setItem("kv_theme",t)}catch(_){}
@@ -222,7 +222,7 @@ function viewDay(){
     <div class="h"><span class="apt">${esc(x.apt)}${bn(x.apt)}</span>${c?chip(sn,sc):""}</div>${(x.out||x.in||c)?legs(x):""}
     ${c?(c.skip?`<div class="note">❎ Уборка не нужна</div>`:cleanBlock(c)):""}
     ${x.general?`${c?'<hr style="border:0;border-top:1px dashed var(--line);width:100%;margin:0">':""}${cleanBlock(x.general)}`:""}
-    ${x.in&&isAdmin()?`<div class="bar">${!x.in.no_show&&ui.date<=today()?`<button class="sm" data-noshow="${x.in.id}">Незаезд</button>`:x.in.no_show?`<button class="sm" data-unnoshow="${x.in.id}">Отменить незаезд</button>`:""}<button class="sm" data-move="${x.in.id}">Переселить</button>${x.in.source!=="booking"?`<button class="sm warn" data-cxday="${x.in.id}">Отменить бронь</button>`:""}<button class="sm" data-trday="${x.in.id}" data-apt="${esc(x.apt)}" data-g="${x.in.guests||""}" data-n="${x.in.nights}">+ Трансфер</button></div>`:""}
+    ${x.in&&isAdmin()?`<div class="bar">${!x.in.no_show&&ui.date<=today()?`<button class="sm" data-noshow="${x.in.id}">Незаезд</button>`:x.in.no_show?`<button class="sm" data-unnoshow="${x.in.id}">Отменить незаезд</button>`:""}<button class="sm" data-edday="${x.in.id}">✏️ Изменить</button><button class="sm" data-move="${x.in.id}">Переселить</button>${x.in.source!=="booking"?`<button class="sm warn" data-cxday="${x.in.id}">Отменить бронь</button>`:""}<button class="sm" data-trday="${x.in.id}" data-apt="${esc(x.apt)}" data-g="${x.in.guests||""}" data-n="${x.in.nights}">+ Трансфер</button></div>`:""}
     ${ui.sheet==="tr"+x.in?.id&&ui.trg?.id===x.in.id?transferForm(ui.trg):""}
     ${ui.sheet==="move"+x.in?.id?`<div class="sheet"><label class="f">Переселить в<select id="mv">${cache.apts.filter(a=>a.id!==x.apartment_id).map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join("")}</select></label><p class="note">Проверю, свободна ли квартира на все ночи. Уборки и график пересчитаются.</p><div class="bar"><button class="go" data-domove="${x.in.id}">Переселить</button><button data-act="close">Отмена</button></div></div>`:""}
   </div>`}).join("")}
@@ -242,6 +242,18 @@ function extraForm(){const d=ui.exDate||ui.date,fa=ui.exApt?cache.apts.find(a=>a
   <label class="f">Имя гостя<input id="ex-n"></label><label class="f">Телефон<input id="ex-ph" inputmode="tel"></label></div>
   <p class="note">Прямая бронь (не Booking). Даты автоматически закроются на Booking через Beds24. Брони с Booking приходят сами.</p>
   <div class="bar"><button class="go" type="submit">${fa?`Закрыть ${esc(fa.name)}`:"Сохранить"}</button><button type="button" data-act="close">Отмена</button></div></form>`}
+// Правка брони: прямая — всё; Booking — только телефон, время, гостей, заметка
+function editForm(b){const ex=b.source!=="booking",a=x=>esc(x??"");return `<form class="sheet" id="ebf" data-id="${b.id}" data-ex="${ex?1:""}"><b>✏️ Изменить бронь</b><div class="grid">
+  ${ex?`<label class="f">Имя гостя<input id="eb-n" value="${a(b.guest_name)}"></label>`:""}
+  <label class="f">Телефон<input id="eb-ph" inputmode="tel" value="${a(b.guest_phone)}"></label>
+  ${ex?`<label class="f">Заезд<input id="eb-ci" type="date" value="${b.checkin}" required></label><label class="f">Выезд<input id="eb-co" type="date" value="${b.checkout}" required></label>`:""}
+  <label class="f">Время заезда<input id="eb-t" placeholder="14:00" value="${a(b.checkin_time)}"></label><label class="f">Гостей<input id="eb-g" type="number" min="1" value="${a(b.guests)}"></label>
+  ${ex?`<label class="f">Сумма за всё<input id="eb-p" type="number" min="0" step="1" value="${b.price_total!=null?Math.round(b.price_total):""}"></label>
+  <label class="f">Валюта<select id="eb-cur">${["EUR","MDL","USD"].map(c=>`<option ${(b.currency||"EUR")===c?"selected":""}>${c}</option>`).join("")}</select></label>
+  <label class="f">Трансфер, €<input id="eb-tr" type="number" min="0" step="1" value="${a(b.transfer_eur)}"></label>`:""}
+  <label class="f" style="flex-basis:100%">Заметка<input id="eb-nt" value="${a(b.notes)}"></label></div>
+  <p class="note">${ex?"Если поменяешь даты, имя, телефон или гостей — обновлю и в Beds24, даты на Booking закроются/откроются сами.":"Бронь с Booking: даты, имя и сумма приходят с Booking. Здесь можно поправить телефон, время, гостей и заметку."}</p>
+  <div class="bar"><button class="go" type="submit">Сохранить</button><button type="button" class="sm" data-edno="1">Отмена</button></div></form>`}
 function viberText(){
   // Одно сообщение в группу: сначала кто какие квартиры убирает, потом все квартиры по порядку
   const r=[...cache.day].sort((x,y)=>x.apartment_id-y.apartment_id).map(x=>x.cleaning?.skip?{...x,cleaning:null}:x);
@@ -578,7 +590,7 @@ function viewCalApt(){
       ${b.ext_id&&b.source==="booking"?`<span>№ Booking</span><b>${esc(b.ext_id)}</b>`:""}
       ${(b.transfers||[]).map(t=>`<span>Трансфер</span><b>${dm(t.date)} ${esc(t.time)} · ${esc(t.from)} → ${esc(t.to)}</b>`).join("")}
       ${b.notes?`<span>Заметка</span><b>${esc(b.notes)}</b>`:""}</div>
-      ${isAdmin()&&b.source!=="booking"?(ui.cxl===+b.id?`<div class="remark">Отменить бронь ${esc(nm)} ${dm(b.checkin)}–${dm(b.checkout)}? Даты снова откроются на Booking.</div><div class="bar"><button class="warn" data-cxdo="${b.id}">Да, отменить бронь</button><button class="sm" data-cxno="1">Нет</button></div>`:`<div class="bar"><button class="sm warn" data-cx="${b.id}">Отменить бронь</button></div>`):""}</div>`};
+      ${isAdmin()&&ui.edb===+b.id?editForm(b):isAdmin()&&b.source!=="booking"?(ui.cxl===+b.id?`<div class="remark">Отменить бронь ${esc(nm)} ${dm(b.checkin)}–${dm(b.checkout)}? Даты снова откроются на Booking.</div><div class="bar"><button class="warn" data-cxdo="${b.id}">Да, отменить бронь</button><button class="sm" data-cxno="1">Нет</button></div>`:`<div class="bar"><button class="sm" data-edb="${b.id}">✏️ Изменить</button><button class="sm warn" data-cx="${b.id}">Отменить бронь</button></div>`):isAdmin()?`<div class="bar"><button class="sm" data-edb="${b.id}">✏️ Изменить</button></div>`:""}</div>`};
     det=`<h2 class="cdh">${ru(d)}</h2>
     ${o&&o!==b?card(o,"◀ Выезд"):""}${b?card(b,b.checkin===d?"▶ Заезд":"Живёт"):""}
     ${!b?`<div class="card"><div class="h"><span class="apt">Свободно</span></div><div class="note">Ночь с ${dm(d)} на ${dm(shiftDate(d,1))} никем не занята.</div></div>`:""}
@@ -661,7 +673,10 @@ document.addEventListener("click",async e=>{
     if(d.act==="hand"){ui.sheet="hand";render();return}
     if(d.act==="handdo"){const r=await call("cash_handover",{ids:(cache.cash?.items||[]).map(i=>i.id)});ui.sheet=null;toast("Передано: "+r.sum);await load();return}
     if(d.mm){const [y,m]=ui.mm.split("-").map(Number),t=new Date(y,m-1+(+d.mm),1);ui.mm=t.getFullYear()+"-"+String(t.getMonth()+1).padStart(2,"0");await load();return}
-    if(d.cx){ui.cxl=+d.cx;render();return}
+    if(d.cx){ui.cxl=+d.cx;ui.edb=null;render();return}
+    if(d.edb){ui.edb=+d.edb;ui.cxl=null;render();document.getElementById("ebf")?.scrollIntoView({behavior:"smooth",block:"start"});return}
+    if(d.edno){ui.edb=null;render();return}
+    if(d.edday){const bk=cache.day.find(x=>x.in?.id==d.edday);ui.edb=+d.edday;ui.cxl=null;ui.tab="cal";ui.calAll=false;ui.ca=bk?.apartment_id||ui.ca;ui.cm=ui.date.slice(0,8)+"01";ui.cd=ui.date;await load();document.getElementById("ebf")?.scrollIntoView({behavior:"smooth",block:"start"});return}
     if(d.cxno){ui.cxl=null;render();return}
     if(d.cxday){ui.cxl=+d.cxday;const bk=cache.day.find(x=>x.in?.id==d.cxday);ui.tab="cal";ui.calAll=false;ui.ca=bk?.apartment_id||ui.ca;ui.cm=ui.date.slice(0,8)+"01";ui.cd=ui.date;await load();return}
     if(d.cxdo){const r=await call("booking_cancel",{booking_id:+d.cxdo});ui.cxl=null;ui.cd=null;toast(r.note||"Бронь отменена");await load();return}
@@ -764,6 +779,9 @@ document.addEventListener("submit",async e=>{
   e.preventDefault();const f=e.target,v=id=>document.getElementById(id)?.value;
   try{
     if(f.id==="exf"){const r=await call("booking_create",{apartment_id:+v("ex-a"),source:v("ex-src"),checkin:v("ex-ci"),checkout:v("ex-co"),checkin_time:v("ex-t")||null,guests:+v("ex-g")||null,price_total:v("ex-p")?+v("ex-p"):null,transfer_eur:v("ex-tr")?+v("ex-tr"):null,name:v("ex-n")||null,phone:v("ex-ph")||null});const fromCal=!!ui.exApt;ui.sheet=null;ui.exApt=null;ui.exDate=null;toast(fromCal?"Готово: даты закрыты":"Бронь сохранена");await load();if(r.note)setTimeout(()=>toast(r.note),2400);return}
+    if(f.id==="ebf"){const ex=!!f.dataset.ex,body={booking_id:+f.dataset.id,phone:v("eb-ph"),checkin_time:v("eb-t"),guests:v("eb-g"),notes:v("eb-nt")};
+      if(ex)Object.assign(body,{name:v("eb-n"),checkin:v("eb-ci"),checkout:v("eb-co"),price_total:v("eb-p"),currency:v("eb-cur"),transfer_eur:v("eb-tr")});
+      const r=await call("booking_edit",body);ui.edb=null;if(ex&&body.checkin)ui.cd=body.checkin;toast(r.note||"Сохранено");await load();return}
     if(f.id==="prf"){const f2=ui.pform,s=ui.psel,lo=s.b&&s.b<s.a?s.b:s.a,hi=s.b?(s.b<s.a?s.a:s.b):s.a;
       const r=await call("price_set",{apartment_id:ui.pa,from:lo,to:hi,price:f2.p||null,min_stay:f2.m||null,closed:f2.c==="close"?true:f2.c==="open"?false:null,wd:f2.wd.length<7?f2.wd:[]});
       ui.psel=null;ui.pconf=null;ui.pwd=null;ui.pc="";toast(`Отправлено в Beds24: ${r.days} дн. На Booking — через 1–2 мин.`);await load();return}
